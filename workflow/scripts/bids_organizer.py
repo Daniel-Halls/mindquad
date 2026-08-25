@@ -219,7 +219,8 @@ class DICOMSeriesClassifier:
         Returns:
             BIDS suffix string or None.
         """
-        if any(key in description for key in ["dwi", "diff", "dti", "ep2d_diff"]):
+        dwi_keys = ["dwi", "diff", "dti", "ep2d_diff"]
+        if any(key in description for key in dwi_keys):
             return "dwi"
         return None
 
@@ -338,7 +339,7 @@ class DICOMSeriesClassifier:
 
 
 class BIDSFilenameBuilder:
-    """Class to construct standard BIDS file names with canonical entity ordering."""
+    """Class to construct standard BIDS file names with canonical ordering."""
 
     # Canonical BIDS entity ordering according to BIDS Specification v1.9.0
     BIDS_ORDERED_ENTITIES: Tuple[str, ...] = (
@@ -537,7 +538,10 @@ class BIDSOrganizer:
 
     def _group_candidates(
         self, candidates: List[SeriesCandidate]
-    ) -> Dict[Tuple[str, str, Tuple[Tuple[str, str], ...]], List[SeriesCandidate]]:
+    ) -> Dict[
+        Tuple[str, str, Tuple[Tuple[str, str], ...]],
+        List[SeriesCandidate],
+    ]:
         """Group candidates by modality, suffix, and non-run entities.
 
         Args:
@@ -547,7 +551,8 @@ class BIDSOrganizer:
             Dictionary grouping candidates by unique key.
         """
         groups: Dict[
-            Tuple[str, str, Tuple[Tuple[str, str], ...]], List[SeriesCandidate]
+            Tuple[str, str, Tuple[Tuple[str, str], ...]],
+            List[SeriesCandidate],
         ] = {}
 
         for candidate in candidates:
@@ -561,7 +566,8 @@ class BIDSOrganizer:
     def _assign_run_indices(
         self,
         groups: Dict[
-            Tuple[str, str, Tuple[Tuple[str, str], ...]], List[SeriesCandidate]
+            Tuple[str, str, Tuple[Tuple[str, str], ...]],
+            List[SeriesCandidate],
         ],
     ) -> List[SeriesCandidate]:
         """Assign run indices to all sequences having multiple runs.
@@ -616,7 +622,9 @@ class BIDSOrganizer:
 
         candidates = self._collect_candidates(input_dir)
         if not candidates:
-            self._logger.warning("No valid series candidates found in %s", input_dir)
+            self._logger.warning(
+                "No valid series candidates found in %s", input_dir
+            )
             return 0
 
         groups = self._group_candidates(candidates)
@@ -706,7 +714,9 @@ class BIDSOrganizerApp:
         parsed_args = parser.parse_args(args)
 
         if not parsed_args.input_dir.exists():
-            logging.error("Input directory %s does not exist", parsed_args.input_dir)
+            logging.error(
+                "Input directory %s does not exist", parsed_args.input_dir
+            )
             return 1
 
         parsed_args.bids_dir.mkdir(parents=True, exist_ok=True)

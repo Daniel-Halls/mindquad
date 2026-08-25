@@ -151,7 +151,6 @@ class TestBIDSFilenameBuilder(unittest.TestCase):
             entities={"dir": "AP", "run": "01", "task": "rest"},
         )
         stem = builder.build_bids_stem("19081001", classification)
-        # Task must precede dir, which must precede run
         self.assertEqual(
             stem, "sub-19081001_task-rest_dir-AP_run-01_bold"
         )
@@ -161,7 +160,7 @@ class TestBIDSOrganizer(BaseBIDSTest):
     """Test cases for end-to-end BIDSOrganizer."""
 
     def test_organize_subject_single_runs(self) -> None:
-        """Test organizing mock converted files with single instances into BIDS."""
+        """Test organizing mock converted files into BIDS."""
         with self.create_temp_dir() as temp_dir:
             temp_path = Path(temp_dir)
             input_dir = temp_path / "dcm2niix_out"
@@ -170,20 +169,28 @@ class TestBIDSOrganizer(BaseBIDSTest):
             bids_dir.mkdir(parents=True)
 
             # Create mock T1w converted files
+            t1_meta = {"SeriesDescription": "t1_mprage", "SeriesNumber": 1}
             (input_dir / "001_t1_mprage.json").write_text(
-                json.dumps({"SeriesDescription": "t1_mprage", "SeriesNumber": 1}),
-                encoding="utf-8",
+                json.dumps(t1_meta), encoding="utf-8"
             )
-            (input_dir / "001_t1_mprage.nii.gz").write_text("dummy nifti", encoding="utf-8")
+            (input_dir / "001_t1_mprage.nii.gz").write_text(
+                "dummy nifti", encoding="utf-8"
+            )
 
             # Create mock DWI converted files with bval/bvec
+            dwi_meta = {"SeriesDescription": "dwi_dir-ap", "SeriesNumber": 2}
             (input_dir / "002_dwi_AP.json").write_text(
-                json.dumps({"SeriesDescription": "dwi_dir-ap", "SeriesNumber": 2}),
-                encoding="utf-8",
+                json.dumps(dwi_meta), encoding="utf-8"
             )
-            (input_dir / "002_dwi_AP.nii.gz").write_text("dummy dwi", encoding="utf-8")
-            (input_dir / "002_dwi_AP.bval").write_text("0 1000", encoding="utf-8")
-            (input_dir / "002_dwi_AP.bvec").write_text("0 0\n0 1\n0 0", encoding="utf-8")
+            (input_dir / "002_dwi_AP.nii.gz").write_text(
+                "dummy dwi", encoding="utf-8"
+            )
+            (input_dir / "002_dwi_AP.bval").write_text(
+                "0 1000", encoding="utf-8"
+            )
+            (input_dir / "002_dwi_AP.bvec").write_text(
+                "0 0\n0 1\n0 0", encoding="utf-8"
+            )
 
             organizer = BIDSOrganizer()
             transferred = organizer.organize_subject(
@@ -191,24 +198,26 @@ class TestBIDSOrganizer(BaseBIDSTest):
             )
 
             self.assertEqual(transferred, 6)
+            sub_anat = bids_dir / "sub-19081001" / "anat"
+            sub_dwi = bids_dir / "sub-19081001" / "dwi"
             self.assertTrue(
-                (bids_dir / "sub-19081001" / "anat" / "sub-19081001_T1w.nii.gz").exists()
+                (sub_anat / "sub-19081001_T1w.nii.gz").exists()
             )
             self.assertTrue(
-                (bids_dir / "sub-19081001" / "anat" / "sub-19081001_T1w.json").exists()
+                (sub_anat / "sub-19081001_T1w.json").exists()
             )
             self.assertTrue(
-                (bids_dir / "sub-19081001" / "dwi" / "sub-19081001_dir-AP_dwi.nii.gz").exists()
+                (sub_dwi / "sub-19081001_dir-AP_dwi.nii.gz").exists()
             )
             self.assertTrue(
-                (bids_dir / "sub-19081001" / "dwi" / "sub-19081001_dir-AP_dwi.bval").exists()
+                (sub_dwi / "sub-19081001_dir-AP_dwi.bval").exists()
             )
             self.assertTrue(
-                (bids_dir / "sub-19081001" / "dwi" / "sub-19081001_dir-AP_dwi.bvec").exists()
+                (sub_dwi / "sub-19081001_dir-AP_dwi.bvec").exists()
             )
 
     def test_organize_subject_multiple_runs(self) -> None:
-        """Test that multiple runs of same sequence all receive run-01, run-02."""
+        """Test multiple runs of same sequence receive run-01, run-02."""
         with self.create_temp_dir() as temp_dir:
             temp_path = Path(temp_dir)
             input_dir = temp_path / "dcm2niix_out"
@@ -217,18 +226,28 @@ class TestBIDSOrganizer(BaseBIDSTest):
             bids_dir.mkdir(parents=True)
 
             # Create mock first BOLD run (SeriesNumber: 3)
+            r1_meta = {
+                "SeriesDescription": "ep2d_bold_task-rest",
+                "SeriesNumber": 3,
+            }
             (input_dir / "003_bold_rest.json").write_text(
-                json.dumps({"SeriesDescription": "ep2d_bold_task-rest", "SeriesNumber": 3}),
-                encoding="utf-8",
+                json.dumps(r1_meta), encoding="utf-8"
             )
-            (input_dir / "003_bold_rest.nii.gz").write_text("bold 1", encoding="utf-8")
+            (input_dir / "003_bold_rest.nii.gz").write_text(
+                "bold 1", encoding="utf-8"
+            )
 
             # Create mock second BOLD run (SeriesNumber: 7)
+            r2_meta = {
+                "SeriesDescription": "ep2d_bold_task-rest",
+                "SeriesNumber": 7,
+            }
             (input_dir / "007_bold_rest.json").write_text(
-                json.dumps({"SeriesDescription": "ep2d_bold_task-rest", "SeriesNumber": 7}),
-                encoding="utf-8",
+                json.dumps(r2_meta), encoding="utf-8"
             )
-            (input_dir / "007_bold_rest.nii.gz").write_text("bold 2", encoding="utf-8")
+            (input_dir / "007_bold_rest.nii.gz").write_text(
+                "bold 2", encoding="utf-8"
+            )
 
             organizer = BIDSOrganizer()
             transferred = organizer.organize_subject(

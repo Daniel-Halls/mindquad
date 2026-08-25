@@ -91,7 +91,9 @@ class BIDSInitializer:
         """
         readme_path = bids_dir / "README"
         if not readme_path.exists():
-            readme_content = f"# {name}\n\nBIDS-compliant neuroimaging dataset.\n"
+            readme_content = (
+                f"# {name}\n\nBIDS-compliant neuroimaging dataset.\n"
+            )
             readme_path.write_text(readme_content, encoding="utf-8")
             self._logger.info("Created %s", readme_path)
         return readme_path
