@@ -1,0 +1,13 @@
+"""Mindquad Snakemake workflow entry point."""
+
+configfile: "config/config.yaml"
+
+include: "rules/common.smk"
+include: "rules/bids_setup.smk"
+
+
+rule all:
+    """Target rule executing BIDS setup across all configured subjects."""
+    input:
+        "bids/dataset_description.json",
+        expand("bids/sub-{subject}/.bids_organized", subject=BIDS_SUBJECTS)

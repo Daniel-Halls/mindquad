@@ -1,0 +1,33 @@
+# Mindquad Pipeline Configuration
+
+# Project paths
+raw_data_dir: "/imgshare/tES-FUS/pilot/dif_pilot"
+bids_dir: "bids"
+work_dir: "work"
+tmp_dir: ".tmp"
+
+# Subject identification
+# Explicit list of subjects. If empty, rules/common.smk can discover from raw_data_dir.
+subjects:
+  - "19081_001"
+
+# Subject mapping: raw subject directory name -> BIDS subject label (without sub- prefix)
+subject_mapping:
+  "19081_001": "19081001"
+
+# Resource limits (Max: 2 CPU cores as per system constraints)
+threads: 2
+
+# dcm2niix settings
+dcm2niix:
+  args: "-z y -b y -ba y -f %p_%s"
+  module: "dcm2niix"
+
+# BIDS dataset metadata
+dataset_description:
+  Name: "tES-FUS Multimodal Neuroimaging Study"
+  BIDSVersion: "1.9.0"
+  DatasetType: "raw"
+  License: "CC0"
+  Authors:
+    - "tES-FUS Research Team"

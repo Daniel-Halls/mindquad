@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mindquad"
+version = "0.1.0"
+description = "Snakemake neuroimaging pipeline wrapper for multimodal MRI data"
+readme = "README.md"
+requires-python = ">=3.6"
+license = { text = "MIT" }
+authors = [
+    { name = "Mindquad Pipeline Developers" }
+]
+dependencies = [
+    "snakemake>=7.0.0",
+    "nibabel>=3.0.0",
+    "numpy>=1.19.0",
+    "scipy>=1.5.0",
+    "pyyaml>=5.4.0"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=6.0.0",
+    "flake8>=3.9.0",
+    "black>=22.0.0"
+]
