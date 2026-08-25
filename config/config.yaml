@@ -23,6 +23,18 @@ dcm2niix:
   args: "-z y -b y -ba y -f %p_%s"
   module: "dcm2niix"
 
+derivatives_dir: "derivatives"
+
+# MRIQC configuration
+mriqc:
+  modalities:
+    - "T1w"
+    - "bold"
+    - "dwi"
+  threads: 2
+  mem_gb: 8
+  args: "--verbose-reports --no-sub"
+
 # BIDS dataset metadata
 dataset_description:
   Name: "tES-FUS Multimodal Neuroimaging Study"
@@ -31,3 +43,4 @@ dataset_description:
   License: "CC0"
   Authors:
     - "tES-FUS Research Team"
+
