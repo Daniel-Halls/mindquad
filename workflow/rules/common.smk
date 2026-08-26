@@ -171,7 +171,7 @@ def get_fastsurfer_dir() -> str:
 def get_fastsurfer_threads() -> int:
     """Return configured FastSurfer thread count capped at 2."""
     configured_threads = int(config.get("fastsurfer", {}).get("threads", 2))
-    return min(configured_threads, 2)
+    return configured_threads
 
 
 def get_fastsurfer_device() -> str:
@@ -249,7 +249,7 @@ def get_fmriprep_dir() -> str:
 def get_fmriprep_threads() -> int:
     """Return configured fMRIPrep thread count capped at 2."""
     configured_threads = int(config.get("fmriprep", {}).get("threads", 2))
-    return min(configured_threads, 2)
+    return configured_threads
 
 
 def get_fmriprep_mem_mb() -> int:
@@ -300,7 +300,7 @@ def get_qsiprep_dir() -> str:
 def get_qsiprep_threads() -> int:
     """Return configured QSIPrep thread count capped at 2."""
     configured_threads = int(config.get("qsiprep", {}).get("threads", 2))
-    return min(configured_threads, 2)
+    return configured_threads
 
 
 def get_qsiprep_mem_mb() -> int:
@@ -357,7 +357,7 @@ def get_coregistration_threads() -> int:
     configured_threads = int(
         config.get("coregistration", {}).get("threads", 2)
     )
-    return min(configured_threads, 2)
+    return configured_threads
 
 
 def get_coregistration_tool() -> str:
@@ -412,7 +412,7 @@ def get_hcp_dir() -> str:
 def get_hcp_threads() -> int:
     """Return configured HCP processing thread count capped at 2."""
     configured_threads = int(config.get("hcp", {}).get("threads", 2))
-    return min(configured_threads, 2)
+    return configured_threads
 
 
 def get_hcp_processing_mode() -> str:
@@ -483,7 +483,7 @@ def get_mrs_dir() -> str:
 def get_mrs_threads() -> int:
     """Return configured MRS thread count capped at 2."""
     configured_threads = int(config.get("mrs", {}).get("threads", 2))
-    return min(configured_threads, 2)
+    return configured_threads
 
 
 def get_mrs_basis() -> str:

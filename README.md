@@ -72,6 +72,34 @@ pip install -r requirements.txt
 
 ---
 
+## ⚙️ Customizing for Other Datasets
+
+This pipeline is highly adaptable and can be pointed to completely different raw datasets by modifying the `config/config.yaml` file.
+
+### 1. Pointing to New Data
+Change the `raw_data_dir` to point to your new DICOM/raw data folder:
+```yaml
+raw_data_dir: "/path/to/your/new/dataset"
+```
+
+### 2. Subject Discovery
+By default, the pipeline will **auto-discover** any subject folders located inside `raw_data_dir` that do not start with a dot (`.`).
+If you want to run a specific subset of subjects, explicitly list them in the config:
+```yaml
+subjects:
+  - "subject_01"
+  - "subject_02"
+```
+
+### 3. Scaling CPU Cores
+Previous strict CPU limits have been removed! You can now scale up the pipeline to use the full power of your machine. Update the global or tool-specific `threads` limit in `config/config.yaml`:
+```yaml
+threads: 16
+```
+*(Make sure to match this with the `--cores` flag when executing Snakemake!)*
+
+---
+
 ## 💻 Execution Instructions
 
 Ensure you have activated your virtual environment before running Snakemake.

@@ -161,7 +161,7 @@ class MRSConfig:
             work_dir: Optional intermediate working directory.
             tmp_dir: Project-local temporary directory.
         """
-        self._threads = min(max(1, int(threads)), 2)
+        self._threads = max(1, int(threads))
         clean_basis = str(basis).strip() if basis is not None else ""
         self._basis = clean_basis if clean_basis and clean_basis != "." else None
 

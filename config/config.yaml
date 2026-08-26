@@ -15,7 +15,7 @@ subjects:
 subject_mapping:
   "19081_001": "19081001"
 
-# Resource limits (Max: 2 CPU cores as per system constraints)
+# Resource limits 
 threads: 2
 
 # dcm2niix settings
