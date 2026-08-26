@@ -4,9 +4,9 @@
 rule bids_init_dataset:
     """Initialize root BIDS directory and create dataset metadata files."""
     output:
-        dataset_description="bids/dataset_description.json",
-        readme="bids/README",
-        bidsignore="bids/.bidsignore",
+        dataset_description=get_bids_dir() + "/dataset_description.json",
+        readme=get_bids_dir() + "/README",
+        bidsignore=get_bids_dir() + "/.bidsignore",
     params:
         bids_dir=get_bids_dir(),
         name=config.get("dataset_description", {}).get(
@@ -31,9 +31,9 @@ rule dcm2niix_convert_subject:
     input:
         raw_dir=get_raw_subject_dir,
     output:
-        converted_marker="work/sub-{subject}/dcm2niix/.converted",
+        converted_marker=get_work_dir() + "/sub-{subject}/dcm2niix/.converted",
     params:
-        out_dir="work/sub-{subject}/dcm2niix",
+        out_dir=get_work_dir() + "/sub-{subject}/dcm2niix",
         tmp_dir=get_tmp_dir(),
         args=config.get("dcm2niix", {}).get("args", "-z y -b y -ba y -f %p_%s"),
     threads: 2
@@ -49,12 +49,12 @@ rule dcm2niix_convert_subject:
 rule organize_bids_subject:
     """Organize converted NIfTI/JSON files into standard BIDS structure."""
     input:
-        dataset_desc="bids/dataset_description.json",
-        converted_marker="work/sub-{subject}/dcm2niix/.converted",
+        dataset_desc=get_bids_dir() + "/dataset_description.json",
+        converted_marker=get_work_dir() + "/sub-{subject}/dcm2niix/.converted",
     output:
-        bids_marker="bids/sub-{subject}/.bids_organized",
+        bids_marker=get_bids_dir() + "/sub-{subject}/.bids_organized",
     params:
-        input_dir="work/sub-{subject}/dcm2niix",
+        input_dir=get_work_dir() + "/sub-{subject}/dcm2niix",
         bids_dir=get_bids_dir(),
         subject="{subject}",
     threads: 1

@@ -6,11 +6,11 @@ from pathlib import Path
 rule fastsurfer_subject:
     """Run FastSurfer deep-learning whole-brain segmentation and surface reconstruction on T1w image."""
     input:
-        bids_marker="bids/sub-{subject}/.bids_organized",
+        bids_marker=get_bids_dir() + "/sub-{subject}/.bids_organized",
         t1w=get_t1w_image,
     output:
-        marker="derivatives/fastsurfer/sub-{subject}/.fastsurfer_complete",
-        seg="derivatives/fastsurfer/sub-{subject}/mri/aparc.DKTatlas+aseg.deep.mgz",
+        marker=get_fastsurfer_dir() + "/sub-{subject}/.fastsurfer_complete",
+        seg=get_fastsurfer_dir() + "/sub-{subject}/mri/aparc.DKTatlas+aseg.deep.mgz",
     params:
         sd=get_fastsurfer_dir(),
         sid="sub-{subject}",

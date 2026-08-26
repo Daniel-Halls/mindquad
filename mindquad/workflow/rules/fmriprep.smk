@@ -6,14 +6,14 @@ from pathlib import Path
 rule fmriprep_participant:
     """Run fMRIPrep preprocessing integrating FastSurfer outputs."""
     input:
-        bids_dataset="bids/dataset_description.json",
-        bids_marker="bids/sub-{subject}/.bids_organized",
+        bids_dataset=get_bids_dir() + "/dataset_description.json",
+        bids_marker=get_bids_dir() + "/sub-{subject}/.bids_organized",
         fastsurfer_marker=(
-            "derivatives/fastsurfer/sub-{subject}/.fastsurfer_complete"
+            get_fastsurfer_dir() + "/sub-{subject}/.fastsurfer_complete"
         ),
     output:
-        marker="derivatives/fmriprep/sub-{subject}/.fmriprep_complete",
-        report="derivatives/fmriprep/sub-{subject}.html",
+        marker=get_fmriprep_dir() + "/sub-{subject}/.fmriprep_complete",
+        report=get_fmriprep_dir() + "/sub-{subject}.html",
     params:
         bids_dir=get_bids_dir(),
         out_dir=get_fmriprep_dir(),
