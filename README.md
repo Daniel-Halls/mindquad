@@ -107,6 +107,39 @@ snakemake -s mindquad/workflow/Snakefile --cores 16 --configfile /path/to/my_cus
 
 ---
 
+## 📄 Configuration Reference
+
+A template configuration file (`config_template.yaml`) is provided in the root of the repository. Below is a breakdown of all possible configuration options:
+
+### General & Paths
+| Option | Type | Mandatory? | Description |
+|---|---|---|---|
+| `raw_data_dir` | String | **Yes** | Absolute path to the raw DICOM dataset directory. |
+| `bids_dir` | String | No | Output folder for BIDS-converted data (Default: `bids`). |
+| `derivatives_dir`| String | No | Output folder for all pipeline derivatives (Default: `derivatives`). |
+| `work_dir` | String | No | Intermediate working directory for tools like QSIPrep (Default: `work`). |
+| `tmp_dir` | String | No | Temporary directory for pipeline scratch data (Default: `.tmp`). |
+| `threads` | Integer | No | Global fallback limit for CPU cores across all rules (Default: `2`). |
+| `subjects` | List | No | Explicit list of subject folder names to process. If empty, auto-discovers all non-hidden folders in `raw_data_dir`. |
+| `subject_mapping`| Dict | No | Maps raw subject folder names to desired BIDS participant labels (without `sub-`). |
+
+### Tool-Specific Blocks
+Each tool has its own configuration block (e.g., `mriqc:`, `fastsurfer:`). Common options across tools include:
+- `threads`: (Integer) Override the global core limit for this specific tool.
+- `args`: (String) Extra CLI arguments appended directly to the tool's execution command.
+- `module`: (String) Name of the HPC module to load (if applicable).
+- `fs_license`: (String) Path to your FreeSurfer `license.txt` (Required for FastSurfer, fMRIPrep, QSIPrep).
+
+**Specific highlights:**
+- **MRIQC**: `modalities` (List) - Which modalities to run (T1w, bold, dwi). `mem_gb` (Int).
+- **fMRIPrep**: `output_spaces` (List) - e.g., `MNI152NLin2009cAsym:res-2`. `cifti_output` (String) - e.g., `91k`.
+- **QSIPrep**: `denoise_method` (String), `unringing_method` (String), `output_resolution` (Float).
+- **Coregistration**: `tool` (String - e.g., `dipy`, `ants`), `metric` (String - e.g., `CC`), `transform_type` (String - e.g., `syn`).
+- **HCP**: `hires_mesh` (Int), `low_res_mesh` (Int), `reg_name` (String - e.g., `MSMSulc`).
+- **MRS**: `fit_algorithm` (String - e.g., `Newton`), `ppm_range` (List of Floats), `baseline_order` (Int).
+
+---
+
 ## 💻 Execution Instructions
 
 Ensure you have activated your virtual environment before running Snakemake.
