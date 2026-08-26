@@ -8,10 +8,11 @@ include: "rules/mriqc.smk"
 include: "rules/fastsurfer.smk"
 include: "rules/fmriprep.smk"
 include: "rules/qsiprep.smk"
+include: "rules/coregistration.smk"
 
 
 rule all:
-    """Target rule executing BIDS setup, QC, FastSurfer, fMRIPrep, and QSIPrep."""
+    """Target rule for BIDS, QC, FastSurfer, fMRIPrep, QSIPrep, and Coreg."""
     input:
         "bids/dataset_description.json",
         expand(
@@ -50,6 +51,20 @@ rule all:
         ),
         expand(
             "derivatives/qsiprep/sub-{subject}.html",
+            subject=get_bids_subjects(),
+        ),
+        expand(
+            "derivatives/coregistration/sub-{subject}/"
+            ".coregistration_complete",
+            subject=get_bids_subjects(),
+        ),
+        expand(
+            "derivatives/coregistration/sub-{subject}/"
+            "anat/sub-{subject}_space-T1w_desc-coreg_T2w.nii.gz",
+            subject=get_bids_subjects(),
+        ),
+        expand(
+            "derivatives/coregistration/sub-{subject}.html",
             subject=get_bids_subjects(),
         ),
 

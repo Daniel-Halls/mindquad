@@ -206,13 +206,31 @@ def get_t1w_image(wildcards: Any) -> str:
     if standard_t1.exists():
         return str(standard_t1)
 
+
+def get_t2w_image(wildcards: Any) -> str:
+    """Resolve T2w anatomical image path for a given subject wildcard.
+
+    Args:
+        wildcards: Snakemake wildcards containing 'subject'.
+
+    Returns:
+        Path to structural T2w NIfTI image.
+    """
+    subject_label = str(wildcards.subject).replace("sub-", "").strip()
+    bids_root = Path(get_bids_dir())
+    anat_dir = bids_root / f"sub-{subject_label}" / "anat"
+    standard_t2 = anat_dir / f"sub-{subject_label}_T2w.nii.gz"
+
+    if standard_t2.exists():
+        return str(standard_t2)
+
     if anat_dir.exists():
-        for pattern in ["*T1w*.nii.gz", "*T1w*.nii"]:
+        for pattern in ["*T2w*.nii.gz", "*T2w*.nii"]:
             matches = sorted(anat_dir.glob(pattern))
             if matches:
                 return str(matches[0])
 
-    return str(standard_t1)
+    return str(standard_t2)
 
 
 def get_fmriprep_dir() -> str:
@@ -320,4 +338,41 @@ def get_qsiprep_extra_args() -> str:
     """Return extra CLI flags for QSIPrep from configuration."""
     default_args = "--skip-bids-validation --notrack"
     return str(config.get("qsiprep", {}).get("args", default_args))
+
+def get_coregistration_dir() -> str:
+    """Return the Coregistration derivatives output directory path."""
+    return str(Path(get_derivatives_dir()) / "coregistration")
+
+
+def get_coregistration_threads() -> int:
+    """Return configured Coregistration thread count capped at 2."""
+    configured_threads = int(
+        config.get("coregistration", {}).get("threads", 2)
+    )
+    return min(configured_threads, 2)
+
+
+def get_coregistration_tool() -> str:
+    """Return configured coregistration backend tool ('dipy' or 'ants')."""
+    return str(config.get("coregistration", {}).get("tool", "dipy"))
+
+
+def get_coregistration_metric() -> str:
+    """Return configured similarity metric for diffeomorphic registration."""
+    return str(config.get("coregistration", {}).get("metric", "CC"))
+
+
+def get_coregistration_transform_type() -> str:
+    """Return configured transformation model for coregistration."""
+    return str(config.get("coregistration", {}).get("transform_type", "syn"))
+
+
+def get_coregistration_step_length() -> float:
+    """Return configured optimization step length for coregistration."""
+    return float(config.get("coregistration", {}).get("step_length", 0.25))
+
+
+def get_coregistration_extra_args() -> str:
+    """Return extra CLI flags for coregistration from configuration."""
+    return str(config.get("coregistration", {}).get("args", ""))
 
