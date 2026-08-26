@@ -72,14 +72,19 @@ def get_raw_data_dir() -> str:
     return str(cohort.raw_data_dir)
 
 
+def get_output_dir() -> str:
+    """Return the global output directory prefix from configuration."""
+    return str(config.get("output_dir", "."))
+
+
 def get_bids_dir() -> str:
     """Return the BIDS dataset root directory from configuration."""
-    return str(config.get("bids_dir", "bids"))
+    return str(Path(get_output_dir()) / config.get("bids_dir", "bids"))
 
 
 def get_derivatives_dir() -> str:
     """Return the root derivatives directory from configuration."""
-    return str(config.get("derivatives_dir", "derivatives"))
+    return str(Path(get_output_dir()) / config.get("derivatives_dir", "derivatives"))
 
 
 def get_mriqc_dir() -> str:
@@ -89,12 +94,12 @@ def get_mriqc_dir() -> str:
 
 def get_work_dir() -> str:
     """Return the intermediate working directory from configuration."""
-    return str(config.get("work_dir", "work"))
+    return str(Path(get_output_dir()) / config.get("work_dir", "work"))
 
 
 def get_tmp_dir() -> str:
     """Return the project-local temporary directory path."""
-    return str(config.get("tmp_dir", ".tmp"))
+    return str(Path(get_output_dir()) / config.get("tmp_dir", ".tmp"))
 
 
 def get_mriqc_modalities() -> str:
