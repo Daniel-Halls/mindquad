@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from workflow.scripts.mriqc_helper import (
+from mindquad.workflow.scripts.mriqc_helper import (
     MRIQCApp,
     MRIQCCommandBuilder,
     MRIQCConfig,

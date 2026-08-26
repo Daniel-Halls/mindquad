@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from workflow.scripts.fastsurfer_helper import (
+from mindquad.workflow.scripts.fastsurfer_helper import (
     FastSurferApp,
     FastSurferCommandBuilder,
     FastSurferConfig,

@@ -67,14 +67,14 @@ python3 -m venv .venv
 source .venv/bin/activate
 
 # Install requirements
-pip install -r requirements.txt
+pip install -e .
 ```
 
 ---
 
 ## ⚙️ Customizing for Other Datasets
 
-This pipeline is highly adaptable and can be pointed to completely different raw datasets by modifying the `config/config.yaml` file.
+This pipeline is highly adaptable and can be pointed to completely different raw datasets by modifying the `mindquad/config/config.yaml` file.
 
 ### 1. Pointing to New Data
 Change the `raw_data_dir` to point to your new DICOM/raw data folder:
@@ -92,7 +92,7 @@ subjects:
 ```
 
 ### 3. Scaling CPU Cores
-Previous strict CPU limits have been removed! You can now scale up the pipeline to use the full power of your machine. Update the global or tool-specific `threads` limit in `config/config.yaml`:
+Previous strict CPU limits have been removed! You can now scale up the pipeline to use the full power of your machine. Update the global or tool-specific `threads` limit in `mindquad/config/config.yaml`:
 ```yaml
 threads: 16
 ```
@@ -101,9 +101,9 @@ threads: 16
 ### 4. External Configuration Files
 You do not need to keep your configuration file inside the repository. You can maintain your own `.yaml` config file anywhere on your system and pass it to Snakemake at runtime using the `--configfile` argument. This is especially useful for managing different environments or datasets without modifying the repository.
 ```bash
-snakemake --cores 16 --configfile /path/to/my_custom_dataset.yaml
+snakemake -s mindquad/workflow/Snakefile --cores 16 --configfile /path/to/my_custom_dataset.yaml
 ```
-*Note: This will override any settings present in the default `config/config.yaml`. If you use an external config, you can safely delete `config/config.yaml` from the repository.*
+*Note: This will override any settings present in the default `mindquad/config/config.yaml`. If you use an external config, you can safely delete `mindquad/config/config.yaml` from the repository.*
 
 ---
 
@@ -116,20 +116,20 @@ source .venv/bin/activate
 ```
 
 ### Running Locally
-To test the pipeline locally, you can run Snakemake directly. **Note:** All rules in this pipeline are strictly constrained to a maximum of **2 CPU cores** to adhere to local system limits.
+To test the pipeline locally, you can run Snakemake directly. 
 
 ```bash
 # Dry-run to preview the execution plan
-snakemake -n
+snakemake -s mindquad/workflow/Snakefile -n
 
 # Execute the pipeline using 2 cores
-snakemake --cores 2
+snakemake -s mindquad/workflow/Snakefile --cores 2
 ```
 
 ### Running on an HPC Cluster (SLURM)
 To run the full pipeline on a cluster, you must submit it via a Snakemake profile. Do **not** use `--cores` higher than 2 if running on a login node. Instead, let Snakemake submit individual jobs:
 
 ```bash
-snakemake --profile slurm
+snakemake -s mindquad/workflow/Snakefile --profile slurm
 ```
 *(Ensure you have a `.config/snakemake/slurm` profile configured for your specific HPC environment).*
