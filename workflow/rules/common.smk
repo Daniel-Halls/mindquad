@@ -206,6 +206,14 @@ def get_t1w_image(wildcards: Any) -> str:
     if standard_t1.exists():
         return str(standard_t1)
 
+    if anat_dir.exists():
+        for pattern in ["*T1w*.nii.gz", "*T1w*.nii"]:
+            matches = sorted(anat_dir.glob(pattern))
+            if matches:
+                return str(matches[0])
+
+    return str(standard_t1)
+
 
 def get_t2w_image(wildcards: Any) -> str:
     """Resolve T2w anatomical image path for a given subject wildcard.
@@ -465,5 +473,129 @@ def get_hcp_ref_myelin_maps() -> str:
 def get_hcp_extra_args() -> str:
     """Return extra CLI flags for HCP PostFreeSurfer from configuration."""
     return str(config.get("hcp", {}).get("args", ""))
+
+
+def get_mrs_dir() -> str:
+    """Return the MRS derivatives output directory path."""
+    return str(Path(get_derivatives_dir()) / "mrs")
+
+
+def get_mrs_threads() -> int:
+    """Return configured MRS thread count capped at 2."""
+    configured_threads = int(config.get("mrs", {}).get("threads", 2))
+    return min(configured_threads, 2)
+
+
+def get_mrs_basis() -> str:
+    """Return configured basis set path for MRS fitting."""
+    return str(config.get("mrs", {}).get("basis", ""))
+
+
+def get_mrs_fit_algorithm() -> str:
+    """Return configured MRS fitting algorithm ('Newton' or 'MH')."""
+    return str(config.get("mrs", {}).get("fit_algorithm", "Newton"))
+
+
+def get_mrs_ppm_range() -> str:
+    """Return space-separated min and max ppm range for MRS fitting."""
+    ppm = config.get("mrs", {}).get("ppm_range", [0.2, 4.2])
+    if isinstance(ppm, (list, tuple)) and len(ppm) == 2:
+        return f"{ppm[0]} {ppm[1]}"
+    return str(ppm)
+
+
+def get_mrs_ppm_min() -> float:
+    """Return lower bound ppm value for MRS fitting."""
+    ppm = config.get("mrs", {}).get("ppm_range", [0.2, 4.2])
+    if isinstance(ppm, (list, tuple)) and len(ppm) >= 1:
+        return float(ppm[0])
+    return 0.2
+
+
+def get_mrs_ppm_max() -> float:
+    """Return upper bound ppm value for MRS fitting."""
+    ppm = config.get("mrs", {}).get("ppm_range", [0.2, 4.2])
+    if isinstance(ppm, (list, tuple)) and len(ppm) >= 2:
+        return float(ppm[1])
+    return 4.2
+
+
+def get_mrs_baseline_order() -> int:
+    """Return configured polynomial baseline order for MRS fitting."""
+    return int(config.get("mrs", {}).get("baseline_order", 2))
+
+
+def get_mrs_internal_reference() -> str:
+    """Return internal reference metabolite name (e.g. 'Cr', 'tCr')."""
+    return str(config.get("mrs", {}).get("internal_reference", "Cr"))
+
+
+def get_mrs_extra_args() -> str:
+    """Return extra CLI flags for MRS processing from configuration."""
+    return str(config.get("mrs", {}).get("args", ""))
+
+
+def get_mrs_svs_image(wildcards: Any) -> str:
+    """Resolve MRS SVS NIfTI image path for a given subject wildcard.
+
+    Args:
+        wildcards: Snakemake wildcards containing 'subject'.
+
+    Returns:
+        Path to SVS NIfTI image file.
+    """
+    subject_label = str(wildcards.subject).replace("sub-", "").strip()
+    bids_root = Path(get_bids_dir())
+    mrs_dir = bids_root / f"sub-{subject_label}" / "mrs"
+    standard_svs = mrs_dir / f"sub-{subject_label}_svs.nii.gz"
+
+    if standard_svs.exists():
+        return str(standard_svs)
+
+    if mrs_dir.exists():
+        for pattern in [
+            "*svs*.nii.gz",
+            "*svs*.nii",
+            "*mrs*.nii.gz",
+            "*mrs*.nii",
+        ]:
+            matches = sorted(mrs_dir.glob(pattern))
+            if matches:
+                return str(matches[0])
+
+    return str(standard_svs)
+
+
+def get_mrs_water_ref_image(wildcards: Any) -> str:
+    """Resolve MRS water reference NIfTI image path for a given subject wildcard.
+
+    Args:
+        wildcards: Snakemake wildcards containing 'subject'.
+
+    Returns:
+        Path to water reference NIfTI image or empty string if not found.
+    """
+    subject_label = str(wildcards.subject).replace("sub-", "").strip()
+    bids_root = Path(get_bids_dir())
+    mrs_dir = bids_root / f"sub-{subject_label}" / "mrs"
+    standard_ref = mrs_dir / f"sub-{subject_label}_ref.nii.gz"
+
+    if standard_ref.exists():
+        return str(standard_ref)
+
+    if mrs_dir.exists():
+        for pattern in [
+            "*ref*.nii.gz",
+            "*ref*.nii",
+            "*water*.nii.gz",
+            "*wref*.nii.gz",
+            "*h2o*.nii.gz",
+        ]:
+            matches = sorted(mrs_dir.glob(pattern))
+            if matches:
+                return str(matches[0])
+
+    return ""
+
 
 

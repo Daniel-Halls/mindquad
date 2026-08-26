@@ -10,10 +10,11 @@ include: "rules/fmriprep.smk"
 include: "rules/qsiprep.smk"
 include: "rules/coregistration.smk"
 include: "rules/hcp_postfreesurfer.smk"
+include: "rules/mrs.smk"
 
 
 rule all:
-    """Target rule for BIDS, QC, FastSurfer, fMRIPrep, QSIPrep, Coreg, and HCP."""
+    """Target rule for BIDS, QC, FastSurfer, fMRIPrep, QSIPrep, Coreg, HCP, and MRS."""
     input:
         "bids/dataset_description.json",
         expand(
@@ -77,5 +78,18 @@ rule all:
             "sub-{subject}.32k_fs_LR.wb.spec",
             subject=get_bids_subjects(),
         ),
+        expand(
+            "derivatives/mrs/sub-{subject}/.mrs_complete",
+            subject=get_bids_subjects(),
+        ),
+        expand(
+            "derivatives/mrs/sub-{subject}.html",
+            subject=get_bids_subjects(),
+        ),
+        expand(
+            "derivatives/mrs/sub-{subject}/quantities.csv",
+            subject=get_bids_subjects(),
+        ),
+
 
 

@@ -98,6 +98,19 @@ hcp:
   args: ""
 
 
+# MRS configuration (Step 8: MRS processing with FSL-MRS)
+mrs:
+  threads: 2
+  basis: ""
+  fit_algorithm: "Newton"
+  ppm_range:
+    - 0.2
+    - 4.2
+  baseline_order: 2
+  internal_reference: "Cr"
+  args: ""
+
+
 # BIDS dataset metadata
 dataset_description:
   Name: "tES-FUS Multimodal Neuroimaging Study"
