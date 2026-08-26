@@ -70,6 +70,16 @@ qsiprep:
   args: "--skip-bids-validation --notrack"
 
 
+# Coregistration configuration (Step 6: Co-register T2 to T1 with SyN)
+coregistration:
+  tool: "dipy"
+  metric: "CC"
+  transform_type: "syn"
+  step_length: 0.25
+  threads: 2
+  args: ""
+
+
 # BIDS dataset metadata
 dataset_description:
   Name: "tES-FUS Multimodal Neuroimaging Study"

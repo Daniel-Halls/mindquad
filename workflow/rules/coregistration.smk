@@ -1,0 +1,50 @@
+"""Snakemake rules for T2w to T1w diffeomorphic coregistration."""
+
+from pathlib import Path
+
+
+rule coregister_t2_to_t1:
+    """Run diffeomorphic SyN alignment of T2w to T1w structural scan."""
+    input:
+        bids_marker="bids/sub-{subject}/.bids_organized",
+        t1w=get_t1w_image,
+        t2w=get_t2w_image,
+    output:
+        marker=(
+            "derivatives/coregistration/sub-{subject}/.coregistration_complete"
+        ),
+        warped=(
+            "derivatives/coregistration/sub-{subject}/"
+            "anat/sub-{subject}_space-T1w_desc-coreg_T2w.nii.gz"
+        ),
+        report="derivatives/coregistration/sub-{subject}.html",
+    params:
+        out_dir=lambda wildcards: str(
+            Path(get_coregistration_dir()) / f"sub-{wildcards.subject}"
+        ),
+        subject="{subject}",
+        tool=get_coregistration_tool(),
+        metric=get_coregistration_metric(),
+        transform_type=get_coregistration_transform_type(),
+        step_length=get_coregistration_step_length(),
+        tmp_dir=get_tmp_dir(),
+        extra_args=get_coregistration_extra_args(),
+    threads: 2
+    shell:
+        """
+        python workflow/scripts/coregistration_helper.py \
+            --t1 "{input.t1w}" \
+            --t2 "{input.t2w}" \
+            --output-dir "{params.out_dir}" \
+            --subject "{params.subject}" \
+            --tool "{params.tool}" \
+            --metric "{params.metric}" \
+            --transform-type "{params.transform_type}" \
+            --step-length "{params.step_length}" \
+            --threads {threads} \
+            --tmp-dir "{params.tmp_dir}" \
+            --warped-output "{output.warped}" \
+            --marker "{output.marker}" \
+            --report "{output.report}" \
+            --extra-args "{params.extra_args}"
+        """
