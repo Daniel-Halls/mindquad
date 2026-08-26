@@ -6,18 +6,18 @@ from pathlib import Path
 rule coregister_t2_to_t1:
     """Run diffeomorphic SyN alignment of T2w to T1w structural scan."""
     input:
-        bids_marker="bids/sub-{subject}/.bids_organized",
+        bids_marker=get_bids_dir() + "/sub-{subject}/.bids_organized",
         t1w=get_t1w_image,
         t2w=get_t2w_image,
     output:
         marker=(
-            "derivatives/coregistration/sub-{subject}/.coregistration_complete"
+            get_coregistration_dir() + "/sub-{subject}/.coregistration_complete"
         ),
         warped=(
-            "derivatives/coregistration/sub-{subject}/"
+            get_coregistration_dir() + "/sub-{subject}/"
             "anat/sub-{subject}_space-T1w_desc-coreg_T2w.nii.gz"
         ),
-        report="derivatives/coregistration/sub-{subject}.html",
+        report=get_coregistration_dir() + "/sub-{subject}.html",
     params:
         out_dir=lambda wildcards: str(
             Path(get_coregistration_dir()) / f"sub-{wildcards.subject}"

@@ -6,13 +6,13 @@ from pathlib import Path
 rule mrs_processing:
     """Run MRS preprocessing, voxel tissue segmentation, and spectral fitting with FSL-MRS."""
     input:
-        bids_marker="bids/sub-{subject}/.bids_organized",
+        bids_marker=get_bids_dir() + "/sub-{subject}/.bids_organized",
         svs=get_mrs_svs_image,
         t1w=get_t1w_image,
     output:
-        marker="derivatives/mrs/sub-{subject}/.mrs_complete",
-        report="derivatives/mrs/sub-{subject}.html",
-        quantities="derivatives/mrs/sub-{subject}/quantities.csv",
+        marker=get_mrs_dir() + "/sub-{subject}/.mrs_complete",
+        report=get_mrs_dir() + "/sub-{subject}.html",
+        quantities=get_mrs_dir() + "/sub-{subject}/quantities.csv",
     params:
         out_dir=lambda wildcards: str(
             Path(get_mrs_dir()) / f"sub-{wildcards.subject}"

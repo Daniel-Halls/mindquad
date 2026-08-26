@@ -6,22 +6,22 @@ from pathlib import Path
 rule hcp_postfreesurfer:
     """Run HCP PostFreeSurfer pipeline to generate standard surface meshes and CIFTI grayordinates."""
     input:
-        bids_marker="bids/sub-{subject}/.bids_organized",
+        bids_marker=get_bids_dir() + "/sub-{subject}/.bids_organized",
         fastsurfer_marker=(
-            "derivatives/fastsurfer/sub-{subject}/.fastsurfer_complete"
+            get_fastsurfer_dir() + "/sub-{subject}/.fastsurfer_complete"
         ),
         coreg_marker=(
-            "derivatives/coregistration/sub-{subject}/.coregistration_complete"
+            get_coregistration_dir() + "/sub-{subject}/.coregistration_complete"
         ),
         fmriprep_marker=(
-            "derivatives/fmriprep/sub-{subject}/.fmriprep_complete"
+            get_fmriprep_dir() + "/sub-{subject}/.fmriprep_complete"
         ),
         t1w=get_t1w_image,
         coreg_t2w=get_coregistered_t2w_image,
     output:
-        marker="derivatives/hcp/sub-{subject}/.hcp_complete",
+        marker=get_hcp_dir() + "/sub-{subject}/.hcp_complete",
         spec=(
-            "derivatives/hcp/sub-{subject}/MNINonLinear/fsaverage_LR32k/"
+            get_hcp_dir() + "/sub-{subject}/MNINonLinear/fsaverage_LR32k/"
             "sub-{subject}.32k_fs_LR.wb.spec"
         ),
     params:

@@ -6,11 +6,11 @@ from pathlib import Path
 rule mriqc_participant:
     """Run MRIQC participant-level quality control on T1w, bold, and dwi modalities."""
     input:
-        bids_dataset="bids/dataset_description.json",
-        bids_marker="bids/sub-{subject}/.bids_organized",
+        bids_dataset=get_bids_dir() + "/dataset_description.json",
+        bids_marker=get_bids_dir() + "/sub-{subject}/.bids_organized",
     output:
-        marker="derivatives/mriqc/sub-{subject}/.mriqc_complete",
-        report="derivatives/mriqc/sub-{subject}.html",
+        marker=get_mriqc_dir() + "/sub-{subject}/.mriqc_complete",
+        report=get_mriqc_dir() + "/sub-{subject}.html",
     params:
         bids_dir=get_bids_dir(),
         out_dir=get_mriqc_dir(),
@@ -42,11 +42,11 @@ rule mriqc_group:
     """Run MRIQC group-level summary reports across all processed subjects."""
     input:
         participant_markers=expand(
-            "derivatives/mriqc/sub-{subject}/.mriqc_complete",
+            get_mriqc_dir() + "/sub-{subject}/.mriqc_complete",
             subject=get_bids_subjects(),
         ),
     output:
-        group_marker="derivatives/mriqc/.mriqc_group_complete",
+        group_marker=get_mriqc_dir() + "/.mriqc_group_complete",
     params:
         bids_dir=get_bids_dir(),
         out_dir=get_mriqc_dir(),
