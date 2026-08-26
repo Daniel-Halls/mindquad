@@ -39,8 +39,7 @@ rule all:
             subject=get_bids_subjects(),
         ),
         expand(
-            f"{get_fastsurfer_dir()}/sub-{{subject}}/"
-            "mri/aparc.DKTatlas+aseg.deep.mgz",
+            f"{get_fastsurfer_dir()}/sub-{{subject}}/mri/aparc.DKTatlas+aseg.deep.mgz",
             subject=get_bids_subjects(),
         ),
         expand(
@@ -60,13 +59,11 @@ rule all:
             subject=get_bids_subjects(),
         ),
         expand(
-            f"{get_coregistration_dir()}/sub-{{subject}}/"
-            ".coregistration_complete",
+            f"{get_coregistration_dir()}/sub-{{subject}}/.coregistration_complete",
             subject=get_bids_subjects(),
         ),
         expand(
-            f"{get_coregistration_dir()}/sub-{{subject}}/"
-            "anat/sub-{{subject}}_space-T1w_desc-coreg_T2w.nii.gz",
+            f"{get_coregistration_dir()}/sub-{{subject}}/anat/sub-{{subject}}_space-T1w_desc-coreg_T2w.nii.gz",
             subject=get_bids_subjects(),
         ),
         expand(
@@ -78,8 +75,7 @@ rule all:
             subject=get_bids_subjects(),
         ),
         expand(
-            f"{get_hcp_dir()}/sub-{{subject}}/MNINonLinear/fsaverage_LR32k/"
-            "sub-{{subject}}.32k_fs_LR.wb.spec",
+            f"{get_hcp_dir()}/sub-{{subject}}/MNINonLinear/fsaverage_LR32k/sub-{{subject}}.32k_fs_LR.wb.spec",
             subject=get_bids_subjects(),
         ),
         expand(
