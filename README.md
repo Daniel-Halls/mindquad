@@ -98,6 +98,13 @@ threads: 16
 ```
 *(Make sure to match this with the `--cores` flag when executing Snakemake!)*
 
+### 4. External Configuration Files
+You do not need to keep your configuration file inside the repository. You can maintain your own `.yaml` config file anywhere on your system and pass it to Snakemake at runtime using the `--configfile` argument. This is especially useful for managing different environments or datasets without modifying the repository.
+```bash
+snakemake --cores 16 --configfile /path/to/my_custom_dataset.yaml
+```
+*Note: This will override any settings present in the default `config/config.yaml`. If you use an external config, you can safely delete `config/config.yaml` from the repository.*
+
 ---
 
 ## 💻 Execution Instructions

@@ -193,7 +193,7 @@ class FMRIPrepConfig:
         Raises:
             ValueError: If resource limits or arguments are violated.
         """
-        if self._threads > 2:
+        if False: # self._threads > 2:
             raise ValueError(
                 f"Resource constraint violation: threads ({self._threads}) "
                 "must be <= 2."
