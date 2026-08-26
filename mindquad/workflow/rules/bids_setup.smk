@@ -34,7 +34,6 @@ rule dcm2niix_convert_subject:
     output:
         converted_marker=get_work_dir() + "/sub-{subject}/dcm2niix/.converted",
     params:
-        scripts_dir=get_scripts_dir(),
         out_dir=get_work_dir() + "/sub-{subject}/dcm2niix",
         tmp_dir=get_tmp_dir(),
         args=config.get("dcm2niix", {}).get("args", "-z y -b y -ba y -f %p_%s"),
