@@ -39,7 +39,7 @@ rule dcm2niix_convert_subject:
     threads: 2
     shell:
         """
-        module load dcm2niix 2>/dev/null || true
+        module load dcm2niix-img 2>/dev/null || module load dcm2niix 2>/dev/null || true
         mkdir -p "{params.tmp_dir}" "{params.out_dir}"
         TMPDIR="{params.tmp_dir}" dcm2niix {params.args} -o "{params.out_dir}" "{input.raw_dir}"
         touch "{output.converted_marker}"
