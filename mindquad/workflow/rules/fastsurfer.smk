@@ -7,11 +7,11 @@ rule fastsurfer_subject:
     """Run FastSurfer deep-learning whole-brain segmentation and surface reconstruction on T1w image."""
     input:
         bids_marker=get_bids_dir() + "/sub-{subject}/.bids_organized",
-        t1w=get_t1w_image,
     output:
         marker=get_fastsurfer_dir() + "/sub-{subject}/.fastsurfer_complete",
         seg=get_fastsurfer_dir() + "/sub-{subject}/mri/aparc.DKTatlas+aseg.deep.mgz",
     params:
+        t1w=get_t1w_image,
         sd=get_fastsurfer_dir(),
         sid="sub-{subject}",
         device=get_fastsurfer_device(),
@@ -23,7 +23,7 @@ rule fastsurfer_subject:
         """
         module load fastsurfer 2>/dev/null || true
         python workflow/scripts/fastsurfer_helper.py \
-            --t1 "{input.t1w}" \
+            --t1 "{params.t1w}" \
             --sd "{params.sd}" \
             --sid "{params.sid}" \
             --threads {threads} \

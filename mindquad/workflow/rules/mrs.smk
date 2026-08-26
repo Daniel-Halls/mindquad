@@ -7,13 +7,13 @@ rule mrs_processing:
     """Run MRS preprocessing, voxel tissue segmentation, and spectral fitting with FSL-MRS."""
     input:
         bids_marker=get_bids_dir() + "/sub-{subject}/.bids_organized",
-        svs=get_mrs_svs_image,
-        t1w=get_t1w_image,
     output:
         marker=get_mrs_dir() + "/sub-{subject}/.mrs_complete",
         report=get_mrs_dir() + "/sub-{subject}.html",
         quantities=get_mrs_dir() + "/sub-{subject}/quantities.csv",
     params:
+        svs=get_mrs_svs_image,
+        t1w=get_t1w_image,
         out_dir=lambda wildcards: str(
             Path(get_mrs_dir()) / f"sub-{wildcards.subject}"
         ),
@@ -34,8 +34,8 @@ rule mrs_processing:
     shell:
         """
         python workflow/scripts/mrs_helper.py \
-            --data "{input.svs}" \
-            --t1 "{input.t1w}" \
+            --data "{params.svs}" \
+            --t1 "{params.t1w}" \
             --reference "{params.water_ref}" \
             --output-dir "{params.out_dir}" \
             --subject "{params.subject}" \
