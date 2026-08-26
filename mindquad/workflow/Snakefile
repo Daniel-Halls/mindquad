@@ -20,80 +20,77 @@ include: "rules/mrs.smk"
 rule all:
     """Target rule for BIDS, QC, FastSurfer, fMRIPrep, QSIPrep, Coreg, HCP, and MRS."""
     input:
-        "bids/dataset_description.json",
+        f"{get_bids_dir()}/dataset_description.json",
         expand(
-            "bids/sub-{subject}/.bids_organized",
+            f"{get_bids_dir()}/sub-{{subject}}/.bids_organized",
             subject=get_bids_subjects(),
         ),
         expand(
-            "derivatives/mriqc/sub-{subject}/.mriqc_complete",
+            f"{get_mriqc_dir()}/sub-{{subject}}/.mriqc_complete",
             subject=get_bids_subjects(),
         ),
         expand(
-            "derivatives/mriqc/sub-{subject}.html",
+            f"{get_mriqc_dir()}/sub-{{subject}}.html",
             subject=get_bids_subjects(),
         ),
-        "derivatives/mriqc/.mriqc_group_complete",
+        f"{get_mriqc_dir()}/.mriqc_group_complete",
         expand(
-            "derivatives/fastsurfer/sub-{subject}/.fastsurfer_complete",
+            f"{get_fastsurfer_dir()}/sub-{{subject}}/.fastsurfer_complete",
             subject=get_bids_subjects(),
         ),
         expand(
-            "derivatives/fastsurfer/sub-{subject}/"
+            f"{get_fastsurfer_dir()}/sub-{{subject}}/"
             "mri/aparc.DKTatlas+aseg.deep.mgz",
             subject=get_bids_subjects(),
         ),
         expand(
-            "derivatives/fmriprep/sub-{subject}/.fmriprep_complete",
+            f"{get_fmriprep_dir()}/sub-{{subject}}/.fmriprep_complete",
             subject=get_bids_subjects(),
         ),
         expand(
-            "derivatives/fmriprep/sub-{subject}.html",
+            f"{get_fmriprep_dir()}/sub-{{subject}}.html",
             subject=get_bids_subjects(),
         ),
         expand(
-            "derivatives/qsiprep/sub-{subject}/.qsiprep_complete",
+            f"{get_qsiprep_dir()}/sub-{{subject}}/.qsiprep_complete",
             subject=get_bids_subjects(),
         ),
         expand(
-            "derivatives/qsiprep/sub-{subject}.html",
+            f"{get_qsiprep_dir()}/sub-{{subject}}.html",
             subject=get_bids_subjects(),
         ),
         expand(
-            "derivatives/coregistration/sub-{subject}/"
+            f"{get_coregistration_dir()}/sub-{{subject}}/"
             ".coregistration_complete",
             subject=get_bids_subjects(),
         ),
         expand(
-            "derivatives/coregistration/sub-{subject}/"
-            "anat/sub-{subject}_space-T1w_desc-coreg_T2w.nii.gz",
+            f"{get_coregistration_dir()}/sub-{{subject}}/"
+            "anat/sub-{{subject}}_space-T1w_desc-coreg_T2w.nii.gz",
             subject=get_bids_subjects(),
         ),
         expand(
-            "derivatives/coregistration/sub-{subject}.html",
+            f"{get_coregistration_dir()}/sub-{{subject}}.html",
             subject=get_bids_subjects(),
         ),
         expand(
-            "derivatives/hcp/sub-{subject}/.hcp_complete",
+            f"{get_hcp_dir()}/sub-{{subject}}/.hcp_complete",
             subject=get_bids_subjects(),
         ),
         expand(
-            "derivatives/hcp/sub-{subject}/MNINonLinear/fsaverage_LR32k/"
-            "sub-{subject}.32k_fs_LR.wb.spec",
+            f"{get_hcp_dir()}/sub-{{subject}}/MNINonLinear/fsaverage_LR32k/"
+            "sub-{{subject}}.32k_fs_LR.wb.spec",
             subject=get_bids_subjects(),
         ),
         expand(
-            "derivatives/mrs/sub-{subject}/.mrs_complete",
+            f"{get_mrs_dir()}/sub-{{subject}}/.mrs_complete",
             subject=get_bids_subjects(),
         ),
         expand(
-            "derivatives/mrs/sub-{subject}.html",
+            f"{get_mrs_dir()}/sub-{{subject}}.html",
             subject=get_bids_subjects(),
         ),
         expand(
-            "derivatives/mrs/sub-{subject}/quantities.csv",
+            f"{get_mrs_dir()}/sub-{{subject}}/quantities.csv",
             subject=get_bids_subjects(),
         ),
-
-
-
