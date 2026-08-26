@@ -115,6 +115,7 @@ A template configuration file (`config_template.yaml`) is provided in the root o
 | Option | Type | Mandatory? | Description |
 |---|---|---|---|
 | `raw_data_dir` | String | **Yes** | Absolute path to the raw DICOM dataset directory. |
+| `output_dir` | String | No | Global output directory for pipeline outputs (Default: `.`). |
 | `bids_dir` | String | No | Output folder for BIDS-converted data (Default: `bids`). |
 | `derivatives_dir`| String | No | Output folder for all pipeline derivatives (Default: `derivatives`). |
 | `work_dir` | String | No | Intermediate working directory for tools like QSIPrep (Default: `work`). |

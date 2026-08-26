@@ -4,6 +4,9 @@
 # ---------------------------------------------------------
 # General Project Paths
 # ---------------------------------------------------------
+# (Optional) Global output directory for bids, work, and derivatives. (Default: ".")
+output_dir: "."
+# ---------------------------------------------------------
 # (Mandatory) Absolute path to the raw DICOM data folder
 raw_data_dir: "/path/to/your/raw/dataset"
 
