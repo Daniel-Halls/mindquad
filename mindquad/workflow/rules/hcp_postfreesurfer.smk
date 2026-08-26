@@ -16,8 +16,6 @@ rule hcp_postfreesurfer:
         fmriprep_marker=(
             get_fmriprep_dir() + "/sub-{subject}/.fmriprep_complete"
         ),
-        t1w=get_t1w_image,
-        coreg_t2w=get_coregistered_t2w_image,
     output:
         marker=get_hcp_dir() + "/sub-{subject}/.hcp_complete",
         spec=(
@@ -25,6 +23,8 @@ rule hcp_postfreesurfer:
             "sub-{subject}.32k_fs_LR.wb.spec"
         ),
     params:
+        t1w=get_t1w_image,
+        coreg_t2w=get_coregistered_t2w_image,
         study_folder=get_hcp_dir(),
         subject="sub-{subject}",
         fs_dir=lambda wildcards: str(
@@ -51,8 +51,8 @@ rule hcp_postfreesurfer:
             --study-folder "{params.study_folder}" \
             --subject "{params.subject}" \
             --fs-dir "{params.fs_dir}" \
-            --t1 "{input.t1w}" \
-            --t2 "{input.coreg_t2w}" \
+            --t1 "{params.t1w}" \
+            --t2 "{params.coreg_t2w}" \
             --processing-mode "{params.processing_mode}" \
             --reg-name "{params.reg_name}" \
             --grayordinates-res "{params.grayordinates_res}" \
