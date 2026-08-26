@@ -7,10 +7,11 @@ include: "rules/bids_setup.smk"
 include: "rules/mriqc.smk"
 include: "rules/fastsurfer.smk"
 include: "rules/fmriprep.smk"
+include: "rules/qsiprep.smk"
 
 
 rule all:
-    """Target rule executing BIDS setup, QC, FastSurfer, and fMRIPrep."""
+    """Target rule executing BIDS setup, QC, FastSurfer, fMRIPrep, and QSIPrep."""
     input:
         "bids/dataset_description.json",
         expand(
@@ -43,3 +44,12 @@ rule all:
             "derivatives/fmriprep/sub-{subject}.html",
             subject=get_bids_subjects(),
         ),
+        expand(
+            "derivatives/qsiprep/sub-{subject}/.qsiprep_complete",
+            subject=get_bids_subjects(),
+        ),
+        expand(
+            "derivatives/qsiprep/sub-{subject}.html",
+            subject=get_bids_subjects(),
+        ),
+

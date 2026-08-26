@@ -18,7 +18,8 @@ dependencies = [
     "numpy>=1.19.0",
     "scipy>=1.5.0",
     "pyyaml>=5.4.0",
-    "mriqc>=23.1.0"
+    "mriqc>=23.1.0",
+    "qsiprep>=0.20.0"
 ]
 
 [project.optional-dependencies]

@@ -264,3 +264,60 @@ def get_fmriprep_extra_args() -> str:
     """Return extra CLI flags for fMRIPrep from configuration."""
     default_args = "--skip-bids-validation --notrack"
     return str(config.get("fmriprep", {}).get("args", default_args))
+
+
+def get_qsiprep_dir() -> str:
+    """Return the QSIPrep derivatives output directory path."""
+    return str(Path(get_derivatives_dir()) / "qsiprep")
+
+
+def get_qsiprep_threads() -> int:
+    """Return configured QSIPrep thread count capped at 2."""
+    configured_threads = int(config.get("qsiprep", {}).get("threads", 2))
+    return min(configured_threads, 2)
+
+
+def get_qsiprep_mem_mb() -> int:
+    """Return configured QSIPrep memory limit in MB."""
+    return int(config.get("qsiprep", {}).get("mem_mb", 8000))
+
+
+def get_qsiprep_output_resolution() -> str:
+    """Return configured QSIPrep output DWI resolution."""
+    return str(config.get("qsiprep", {}).get("output_resolution", "1.5"))
+
+
+def get_qsiprep_denoise_method() -> str:
+    """Return configured QSIPrep DWI denoising method."""
+    return str(config.get("qsiprep", {}).get("denoise_method", "dwidenoise"))
+
+
+def get_qsiprep_unringing_method() -> str:
+    """Return configured QSIPrep Gibbs unringing method."""
+    return str(config.get("qsiprep", {}).get("unringing_method", "mrdegibbs"))
+
+
+def get_qsiprep_separate_all_dwis() -> bool:
+    """Return True if QSIPrep should process DWI runs separately."""
+    return bool(config.get("qsiprep", {}).get("separate_all_dwis", False))
+
+
+def get_qsiprep_fs_subjects_dir() -> str:
+    """Return FreeSurfer/FastSurfer subjects directory for QSIPrep."""
+    return str(
+        config.get("qsiprep", {}).get("fs_subjects_dir", get_fastsurfer_dir())
+    )
+
+
+def get_qsiprep_fs_license() -> str:
+    """Return FreeSurfer license file path for QSIPrep."""
+    return str(
+        config.get("qsiprep", {}).get("fs_license", get_fastsurfer_license())
+    )
+
+
+def get_qsiprep_extra_args() -> str:
+    """Return extra CLI flags for QSIPrep from configuration."""
+    default_args = "--skip-bids-validation --notrack"
+    return str(config.get("qsiprep", {}).get("args", default_args))
+
