@@ -1,0 +1,121 @@
+# Mindquad Pipeline Template Configuration
+# Copy this file to your preferred location (e.g., custom_config.yaml) and modify as needed.
+
+# ---------------------------------------------------------
+# General Project Paths
+# ---------------------------------------------------------
+# (Mandatory) Absolute path to the raw DICOM data folder
+raw_data_dir: "/path/to/your/raw/dataset"
+
+# (Optional) Subdirectories to generate. (Defaults: bids, work, .tmp, derivatives)
+bids_dir: "bids"
+work_dir: "work"
+tmp_dir: ".tmp"
+derivatives_dir: "derivatives"
+
+# ---------------------------------------------------------
+# Subject Identification
+# ---------------------------------------------------------
+# (Optional) Explicit list of subject directory names to process.
+# If left empty or omitted, the pipeline will auto-discover all non-hidden folders in `raw_data_dir`.
+subjects:
+  - "subject_01"
+  - "subject_02"
+
+# (Optional) Map raw directory names to BIDS participant labels (without the 'sub-' prefix).
+subject_mapping:
+  "subject_01": "01"
+  "subject_02": "02"
+
+# ---------------------------------------------------------
+# Global Resource Limits
+# ---------------------------------------------------------
+# (Optional) Global fallback for maximum CPU threads per rule. (Default: 2)
+threads: 4
+
+# ---------------------------------------------------------
+# Tool Configurations
+# ---------------------------------------------------------
+
+dcm2niix:
+  args: "-z y -b y -ba y -f %p_%s"
+  module: "dcm2niix"
+
+mriqc:
+  modalities: ["T1w", "bold", "dwi"]
+  threads: 4
+  mem_gb: 8
+  args: "--verbose-reports --no-sub"
+
+fastsurfer:
+  module: "fastsurfer"
+  threads: 4
+  device: "cpu"
+  fs_license: "/path/to/freesurfer/license.txt"
+  args: "--batch 1"
+
+fmriprep:
+  module: "fmriprep"
+  threads: 4
+  mem_mb: 8000
+  output_spaces: ["MNI152NLin2009cAsym:res-2", "fsaverage5"]
+  cifti_output: "91k"
+  fs_license: "/path/to/freesurfer/license.txt"
+  fs_subjects_dir: "derivatives/fastsurfer"
+  args: "--skip-bids-validation --notrack"
+
+qsiprep:
+  module: "qsiprep"
+  threads: 4
+  mem_mb: 8000
+  output_resolution: 1.5
+  denoise_method: "dwidenoise"
+  unringing_method: "mrdegibbs"
+  separate_all_dwis: false
+  fs_license: "/path/to/freesurfer/license.txt"
+  fs_subjects_dir: "derivatives/fastsurfer"
+  args: "--skip-bids-validation --notrack"
+
+coregistration:
+  tool: "dipy"
+  metric: "CC"
+  transform_type: "syn"
+  step_length: 0.25
+  threads: 4
+  args: ""
+
+hcp:
+  module: "hcppipelines"
+  threads: 4
+  processing_mode: "HCPStyleData"
+  reg_name: "MSMSulc"
+  grayordinates_res: 2
+  hires_mesh: 164
+  low_res_mesh: 32
+  thickness_regression: "BOTH"
+  surf_atlas_dir: ""
+  grayordinates_dir: ""
+  subcort_gray_labels: ""
+  freesurfer_labels: ""
+  ref_myelin_maps: ""
+  args: ""
+
+mrs:
+  threads: 4
+  basis: ""
+  fit_algorithm: "Newton"
+  ppm_range: [0.2, 4.2]
+  baseline_order: 2
+  internal_reference: "Cr"
+  args: ""
+
+# ---------------------------------------------------------
+# BIDS Dataset Metadata
+# ---------------------------------------------------------
+dataset_description:
+  Name: "Custom Neuroimaging Study"
+  BIDSVersion: "1.9.0"
+  DatasetType: "raw"
+  License: "CC0"
+  Authors:
+    - "Your Name"
