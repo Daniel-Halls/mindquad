@@ -213,3 +213,54 @@ def get_t1w_image(wildcards: Any) -> str:
                 return str(matches[0])
 
     return str(standard_t1)
+
+
+def get_fmriprep_dir() -> str:
+    """Return the fMRIPrep derivatives output directory path."""
+    return str(Path(get_derivatives_dir()) / "fmriprep")
+
+
+def get_fmriprep_threads() -> int:
+    """Return configured fMRIPrep thread count capped at 2."""
+    configured_threads = int(config.get("fmriprep", {}).get("threads", 2))
+    return min(configured_threads, 2)
+
+
+def get_fmriprep_mem_mb() -> int:
+    """Return configured fMRIPrep memory limit in MB."""
+    return int(config.get("fmriprep", {}).get("mem_mb", 8000))
+
+
+def get_fmriprep_output_spaces() -> str:
+    """Return space-separated string of fMRIPrep output spaces from config."""
+    spaces = config.get("fmriprep", {}).get(
+        "output_spaces", ["MNI152NLin2009cAsym:res-2", "fsaverage5"]
+    )
+    if isinstance(spaces, list):
+        return " ".join(spaces)
+    return str(spaces)
+
+
+def get_fmriprep_cifti_output() -> str:
+    """Return configured CIFTI output resolution for fMRIPrep."""
+    return str(config.get("fmriprep", {}).get("cifti_output", "91k"))
+
+
+def get_fmriprep_fs_subjects_dir() -> str:
+    """Return FreeSurfer/FastSurfer subjects directory for fMRIPrep."""
+    return str(
+        config.get("fmriprep", {}).get("fs_subjects_dir", get_fastsurfer_dir())
+    )
+
+
+def get_fmriprep_fs_license() -> str:
+    """Return FreeSurfer license file path for fMRIPrep."""
+    return str(
+        config.get("fmriprep", {}).get("fs_license", get_fastsurfer_license())
+    )
+
+
+def get_fmriprep_extra_args() -> str:
+    """Return extra CLI flags for fMRIPrep from configuration."""
+    default_args = "--skip-bids-validation --notrack"
+    return str(config.get("fmriprep", {}).get("args", default_args))

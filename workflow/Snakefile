@@ -6,13 +6,17 @@ include: "rules/common.smk"
 include: "rules/bids_setup.smk"
 include: "rules/mriqc.smk"
 include: "rules/fastsurfer.smk"
+include: "rules/fmriprep.smk"
 
 
 rule all:
-    """Target rule executing BIDS setup, MRIQC quality control, and FastSurfer across all subjects."""
+    """Target rule executing BIDS setup, QC, FastSurfer, and fMRIPrep."""
     input:
         "bids/dataset_description.json",
-        expand("bids/sub-{subject}/.bids_organized", subject=get_bids_subjects()),
+        expand(
+            "bids/sub-{subject}/.bids_organized",
+            subject=get_bids_subjects(),
+        ),
         expand(
             "derivatives/mriqc/sub-{subject}/.mriqc_complete",
             subject=get_bids_subjects(),
@@ -27,7 +31,15 @@ rule all:
             subject=get_bids_subjects(),
         ),
         expand(
-            "derivatives/fastsurfer/sub-{subject}/mri/aparc.DKTatlas+aseg.deep.mgz",
+            "derivatives/fastsurfer/sub-{subject}/"
+            "mri/aparc.DKTatlas+aseg.deep.mgz",
             subject=get_bids_subjects(),
         ),
-
+        expand(
+            "derivatives/fmriprep/sub-{subject}/.fmriprep_complete",
+            subject=get_bids_subjects(),
+        ),
+        expand(
+            "derivatives/fmriprep/sub-{subject}.html",
+            subject=get_bids_subjects(),
+        ),

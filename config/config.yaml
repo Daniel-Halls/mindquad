@@ -7,11 +7,11 @@ work_dir: "work"
 tmp_dir: ".tmp"
 
 # Subject identification
-# Explicit list of subjects. If empty, rules/common.smk can discover from raw_data_dir.
+# Explicit subject list. If empty, common.smk discovers from raw_data_dir.
 subjects:
   - "19081_001"
 
-# Subject mapping: raw subject directory name -> BIDS subject label (without sub- prefix)
+# Subject mapping: raw subject dir name -> BIDS label (without sub- prefix)
 subject_mapping:
   "19081_001": "19081001"
 
@@ -43,6 +43,19 @@ fastsurfer:
   fs_license: ""
   args: "--batch 1"
 
+# fMRIPrep configuration
+fmriprep:
+  module: "fmriprep"
+  threads: 2
+  mem_mb: 8000
+  output_spaces:
+    - "MNI152NLin2009cAsym:res-2"
+    - "fsaverage5"
+  cifti_output: "91k"
+  fs_license: ""
+  fs_subjects_dir: "derivatives/fastsurfer"
+  args: "--skip-bids-validation --notrack"
+
 # BIDS dataset metadata
 dataset_description:
   Name: "tES-FUS Multimodal Neuroimaging Study"
@@ -51,4 +64,3 @@ dataset_description:
   License: "CC0"
   Authors:
     - "tES-FUS Research Team"
-
