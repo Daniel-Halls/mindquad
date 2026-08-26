@@ -161,3 +161,55 @@ def get_raw_subject_dir(wildcards: Any) -> str:
     }
     raw_name = reverse_mapping.get(subject_wildcard, subject_wildcard)
     return str(cohort.raw_data_dir / raw_name)
+
+
+def get_fastsurfer_dir() -> str:
+    """Return the FastSurfer derivatives output directory path."""
+    return str(Path(get_derivatives_dir()) / "fastsurfer")
+
+
+def get_fastsurfer_threads() -> int:
+    """Return configured FastSurfer thread count capped at 2."""
+    configured_threads = int(config.get("fastsurfer", {}).get("threads", 2))
+    return min(configured_threads, 2)
+
+
+def get_fastsurfer_device() -> str:
+    """Return configured computing device for FastSurfer."""
+    return str(config.get("fastsurfer", {}).get("device", "cpu"))
+
+
+def get_fastsurfer_license() -> str:
+    """Return configured FreeSurfer license file path if provided."""
+    return str(config.get("fastsurfer", {}).get("fs_license", ""))
+
+
+def get_fastsurfer_extra_args() -> str:
+    """Return extra CLI flags for FastSurfer from configuration."""
+    return str(config.get("fastsurfer", {}).get("args", ""))
+
+
+def get_t1w_image(wildcards: Any) -> str:
+    """Resolve T1w anatomical image path for a given subject wildcard.
+
+    Args:
+        wildcards: Snakemake wildcards containing 'subject'.
+
+    Returns:
+        Path to structural T1w NIfTI image.
+    """
+    subject_label = str(wildcards.subject).replace("sub-", "").strip()
+    bids_root = Path(get_bids_dir())
+    anat_dir = bids_root / f"sub-{subject_label}" / "anat"
+    standard_t1 = anat_dir / f"sub-{subject_label}_T1w.nii.gz"
+
+    if standard_t1.exists():
+        return str(standard_t1)
+
+    if anat_dir.exists():
+        for pattern in ["*T1w*.nii.gz", "*T1w*.nii"]:
+            matches = sorted(anat_dir.glob(pattern))
+            if matches:
+                return str(matches[0])
+
+    return str(standard_t1)
