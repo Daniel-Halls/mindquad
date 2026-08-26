@@ -5,10 +5,11 @@ configfile: "config/config.yaml"
 include: "rules/common.smk"
 include: "rules/bids_setup.smk"
 include: "rules/mriqc.smk"
+include: "rules/fastsurfer.smk"
 
 
 rule all:
-    """Target rule executing BIDS setup and MRIQC quality control across all subjects."""
+    """Target rule executing BIDS setup, MRIQC quality control, and FastSurfer across all subjects."""
     input:
         "bids/dataset_description.json",
         expand("bids/sub-{subject}/.bids_organized", subject=get_bids_subjects()),
@@ -21,3 +22,12 @@ rule all:
             subject=get_bids_subjects(),
         ),
         "derivatives/mriqc/.mriqc_group_complete",
+        expand(
+            "derivatives/fastsurfer/sub-{subject}/.fastsurfer_complete",
+            subject=get_bids_subjects(),
+        ),
+        expand(
+            "derivatives/fastsurfer/sub-{subject}/mri/aparc.DKTatlas+aseg.deep.mgz",
+            subject=get_bids_subjects(),
+        ),
+

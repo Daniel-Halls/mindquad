@@ -35,6 +35,14 @@ mriqc:
   mem_gb: 8
   args: "--verbose-reports --no-sub"
 
+# FastSurfer configuration
+fastsurfer:
+  module: "fastsurfer"
+  threads: 2
+  device: "cpu"
+  fs_license: ""
+  args: "--batch 1"
+
 # BIDS dataset metadata
 dataset_description:
   Name: "tES-FUS Multimodal Neuroimaging Study"

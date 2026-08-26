@@ -473,7 +473,8 @@ class MRIQCApp:
         parser = argparse.ArgumentParser(
             description="Mindquad MRIQC Execution Wrapper"
         )
-        subparsers = parser.add_subparsers(dest="mode", required=True)
+        subparsers = parser.add_subparsers(dest="mode")
+        subparsers.required = True
 
         # Participant subcommand
         part_parser = subparsers.add_parser("participant")
