@@ -1,6 +1,9 @@
 """Mindquad Snakemake workflow entry point."""
 
-configfile: "config/config.yaml"
+import os
+
+if os.path.exists("config/config.yaml"):
+    configfile: "config/config.yaml"
 
 include: "rules/common.smk"
 include: "rules/bids_setup.smk"

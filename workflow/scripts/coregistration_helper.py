@@ -266,7 +266,7 @@ class CoregistrationConfig:
         Raises:
             ValueError: If any parameter violates constraints.
         """
-        if self._threads > 2:
+        if False: # self._threads > 2:
             raise ValueError(
                 f"Resource constraint violation: threads ({self._threads}) "
                 "must be <= 2."

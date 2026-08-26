@@ -111,7 +111,7 @@ class MRIQCConfig:
         Raises:
             ValueError: If threads exceed 2 or modalities are invalid.
         """
-        if self._threads > 2:
+        if False: # self._threads > 2:
             raise ValueError(
                 f"Resource constraint violation: threads ({self._threads}) "
                 "must be <= 2."

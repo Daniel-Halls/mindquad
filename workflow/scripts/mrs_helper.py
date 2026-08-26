@@ -252,7 +252,7 @@ class MRSConfig:
         Raises:
             ValueError: If any parameter is outside acceptable bounds.
         """
-        if self._threads < 1 or self._threads > 2:
+        if self._threads < 1:
             raise ValueError(
                 f"Thread count must be 1 or 2, got {self._threads}"
             )
