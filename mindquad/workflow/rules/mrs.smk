@@ -12,6 +12,7 @@ rule mrs_processing:
         report=get_mrs_dir() + "/sub-{subject}.html",
         quantities=get_mrs_dir() + "/sub-{subject}/quantities.csv",
     params:
+        scripts_dir=get_scripts_dir(),
         svs=get_mrs_svs_image,
         t1w=get_t1w_image,
         out_dir=lambda wildcards: str(
@@ -33,7 +34,7 @@ rule mrs_processing:
     threads: 2
     shell:
         """
-        python workflow/scripts/mrs_helper.py \
+        python "{params.scripts_dir}"/mrs_helper.py \
             --data "{params.svs}" \
             --t1 "{params.t1w}" \
             --reference "{params.water_ref}" \

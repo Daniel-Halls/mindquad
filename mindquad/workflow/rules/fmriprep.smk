@@ -15,6 +15,7 @@ rule fmriprep_participant:
         marker=get_fmriprep_dir() + "/sub-{subject}/.fmriprep_complete",
         report=get_fmriprep_dir() + "/sub-{subject}.html",
     params:
+        scripts_dir=get_scripts_dir(),
         bids_dir=get_bids_dir(),
         out_dir=get_fmriprep_dir(),
         subject="{subject}",
@@ -32,7 +33,7 @@ rule fmriprep_participant:
     shell:
         """
         module load fmriprep 2>/dev/null || true
-        python workflow/scripts/fmriprep_helper.py \
+        python "{params.scripts_dir}"/fmriprep_helper.py \
             --bids-dir "{params.bids_dir}" \
             --output-dir "{params.out_dir}" \
             --subject "{params.subject}" \

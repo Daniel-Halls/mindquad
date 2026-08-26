@@ -12,6 +12,7 @@ rule mriqc_participant:
         marker=get_mriqc_dir() + "/sub-{subject}/.mriqc_complete",
         report=get_mriqc_dir() + "/sub-{subject}.html",
     params:
+        scripts_dir=get_scripts_dir(),
         bids_dir=get_bids_dir(),
         out_dir=get_mriqc_dir(),
         subject="{subject}",
@@ -24,7 +25,7 @@ rule mriqc_participant:
     threads: 2
     shell:
         """
-        python workflow/scripts/mriqc_helper.py participant \
+        python "{params.scripts_dir}"/mriqc_helper.py participant \
             --bids-dir "{params.bids_dir}" \
             --output-dir "{params.out_dir}" \
             --subject "{params.subject}" \
@@ -48,6 +49,7 @@ rule mriqc_group:
     output:
         group_marker=get_mriqc_dir() + "/.mriqc_group_complete",
     params:
+        scripts_dir=get_scripts_dir(),
         bids_dir=get_bids_dir(),
         out_dir=get_mriqc_dir(),
         modalities=get_mriqc_modalities(),
@@ -57,7 +59,7 @@ rule mriqc_group:
     threads: 2
     shell:
         """
-        python workflow/scripts/mriqc_helper.py group \
+        python "{params.scripts_dir}"/mriqc_helper.py group \
             --bids-dir "{params.bids_dir}" \
             --output-dir "{params.out_dir}" \
             --work-dir "{params.work_dir}" \

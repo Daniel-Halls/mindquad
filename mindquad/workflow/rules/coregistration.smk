@@ -17,6 +17,7 @@ rule coregister_t2_to_t1:
         ),
         report=get_coregistration_dir() + "/sub-{subject}.html",
     params:
+        scripts_dir=get_scripts_dir(),
         t1w=get_t1w_image,
         t2w=get_t2w_image,
         out_dir=lambda wildcards: str(
@@ -32,7 +33,7 @@ rule coregister_t2_to_t1:
     threads: 2
     shell:
         """
-        python workflow/scripts/coregistration_helper.py \
+        python "{params.scripts_dir}"/coregistration_helper.py \
             --t1 "{params.t1w}" \
             --t2 "{params.t2w}" \
             --output-dir "{params.out_dir}" \
