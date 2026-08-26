@@ -9,10 +9,11 @@ include: "rules/fastsurfer.smk"
 include: "rules/fmriprep.smk"
 include: "rules/qsiprep.smk"
 include: "rules/coregistration.smk"
+include: "rules/hcp_postfreesurfer.smk"
 
 
 rule all:
-    """Target rule for BIDS, QC, FastSurfer, fMRIPrep, QSIPrep, and Coreg."""
+    """Target rule for BIDS, QC, FastSurfer, fMRIPrep, QSIPrep, Coreg, and HCP."""
     input:
         "bids/dataset_description.json",
         expand(
@@ -67,4 +68,14 @@ rule all:
             "derivatives/coregistration/sub-{subject}.html",
             subject=get_bids_subjects(),
         ),
+        expand(
+            "derivatives/hcp/sub-{subject}/.hcp_complete",
+            subject=get_bids_subjects(),
+        ),
+        expand(
+            "derivatives/hcp/sub-{subject}/MNINonLinear/fsaverage_LR32k/"
+            "sub-{subject}.32k_fs_LR.wb.spec",
+            subject=get_bids_subjects(),
+        ),
+
 

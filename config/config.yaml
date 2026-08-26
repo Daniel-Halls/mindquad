@@ -80,6 +80,24 @@ coregistration:
   args: ""
 
 
+# HCP PostFreeSurfer configuration (Step 7: HCP postfreesurfer pipeline)
+hcp:
+  module: "hcppipelines"
+  threads: 2
+  processing_mode: "HCPStyleData"
+  reg_name: "MSMSulc"
+  grayordinates_res: 2
+  hires_mesh: 164
+  low_res_mesh: 32
+  thickness_regression: "BOTH"
+  surf_atlas_dir: ""
+  grayordinates_dir: ""
+  subcort_gray_labels: ""
+  freesurfer_labels: ""
+  ref_myelin_maps: ""
+  args: ""
+
+
 # BIDS dataset metadata
 dataset_description:
   Name: "tES-FUS Multimodal Neuroimaging Study"

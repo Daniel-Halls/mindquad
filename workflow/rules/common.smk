@@ -376,3 +376,94 @@ def get_coregistration_extra_args() -> str:
     """Return extra CLI flags for coregistration from configuration."""
     return str(config.get("coregistration", {}).get("args", ""))
 
+
+def get_coregistered_t2w_image(wildcards: Any) -> str:
+    """Resolve coregistered T2w anatomical image path for a given subject wildcard.
+
+    Args:
+        wildcards: Snakemake wildcards containing 'subject'.
+
+    Returns:
+        Path to coregistered T2w NIfTI image or raw T2w image fallback.
+    """
+    subject_label = str(wildcards.subject).replace("sub-", "").strip()
+    coreg_dir = Path(get_coregistration_dir()) / f"sub-{subject_label}" / "anat"
+    warped_t2 = (
+        coreg_dir / f"sub-{subject_label}_space-T1w_desc-coreg_T2w.nii.gz"
+    )
+    if warped_t2.exists():
+        return str(warped_t2)
+    return str(get_t2w_image(wildcards))
+
+
+def get_hcp_dir() -> str:
+    """Return the HCP derivatives output directory path."""
+    return str(Path(get_derivatives_dir()) / "hcp")
+
+
+def get_hcp_threads() -> int:
+    """Return configured HCP processing thread count capped at 2."""
+    configured_threads = int(config.get("hcp", {}).get("threads", 2))
+    return min(configured_threads, 2)
+
+
+def get_hcp_processing_mode() -> str:
+    """Return configured HCP processing mode ('HCPStyleData' or 'LegacyStyleData')."""
+    return str(config.get("hcp", {}).get("processing_mode", "HCPStyleData"))
+
+
+def get_hcp_reg_name() -> str:
+    """Return configured HCP surface registration name ('MSMSulc' or 'FS')."""
+    return str(config.get("hcp", {}).get("reg_name", "MSMSulc"))
+
+
+def get_hcp_grayordinates_res() -> int:
+    """Return configured HCP grayordinates resolution in mm."""
+    return int(config.get("hcp", {}).get("grayordinates_res", 2))
+
+
+def get_hcp_hires_mesh() -> int:
+    """Return configured high-resolution standard mesh vertex count in k."""
+    return int(config.get("hcp", {}).get("hires_mesh", 164))
+
+
+def get_hcp_low_res_mesh() -> int:
+    """Return configured low-resolution standard mesh vertex count in k."""
+    return int(config.get("hcp", {}).get("low_res_mesh", 32))
+
+
+def get_hcp_thickness_regression() -> str:
+    """Return configured HCP thickness regression method ('BOTH', 'OLD', 'NEW')."""
+    return str(config.get("hcp", {}).get("thickness_regression", "BOTH"))
+
+
+def get_hcp_surf_atlas_dir() -> str:
+    """Return configured surface atlas templates directory path if set."""
+    return str(config.get("hcp", {}).get("surf_atlas_dir", ""))
+
+
+def get_hcp_grayordinates_dir() -> str:
+    """Return configured grayordinates templates directory path if set."""
+    return str(config.get("hcp", {}).get("grayordinates_dir", ""))
+
+
+def get_hcp_subcort_gray_labels() -> str:
+    """Return configured FreeSurfer subcortical gray label LUT path if set."""
+    return str(config.get("hcp", {}).get("subcort_gray_labels", ""))
+
+
+def get_hcp_freesurfer_labels() -> str:
+    """Return configured FreeSurfer all labels LUT path if set."""
+    return str(config.get("hcp", {}).get("freesurfer_labels", ""))
+
+
+def get_hcp_ref_myelin_maps() -> str:
+    """Return configured group myelin reference map path if set."""
+    return str(config.get("hcp", {}).get("ref_myelin_maps", ""))
+
+
+def get_hcp_extra_args() -> str:
+    """Return extra CLI flags for HCP PostFreeSurfer from configuration."""
+    return str(config.get("hcp", {}).get("args", ""))
+
+
