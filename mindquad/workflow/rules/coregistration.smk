@@ -7,8 +7,6 @@ rule coregister_t2_to_t1:
     """Run diffeomorphic SyN alignment of T2w to T1w structural scan."""
     input:
         bids_marker=get_bids_dir() + "/sub-{subject}/.bids_organized",
-        t1w=get_t1w_image,
-        t2w=get_t2w_image,
     output:
         marker=(
             get_coregistration_dir() + "/sub-{subject}/.coregistration_complete"
@@ -19,6 +17,8 @@ rule coregister_t2_to_t1:
         ),
         report=get_coregistration_dir() + "/sub-{subject}.html",
     params:
+        t1w=get_t1w_image,
+        t2w=get_t2w_image,
         out_dir=lambda wildcards: str(
             Path(get_coregistration_dir()) / f"sub-{wildcards.subject}"
         ),
@@ -33,8 +33,8 @@ rule coregister_t2_to_t1:
     shell:
         """
         python workflow/scripts/coregistration_helper.py \
-            --t1 "{input.t1w}" \
-            --t2 "{input.t2w}" \
+            --t1 "{params.t1w}" \
+            --t2 "{params.t2w}" \
             --output-dir "{params.out_dir}" \
             --subject "{params.subject}" \
             --tool "{params.tool}" \
