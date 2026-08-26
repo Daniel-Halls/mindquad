@@ -23,6 +23,7 @@ rule hcp_postfreesurfer:
             "sub-{subject}.32k_fs_LR.wb.spec"
         ),
     params:
+        scripts_dir=get_scripts_dir(),
         t1w=get_t1w_image,
         coreg_t2w=get_coregistered_t2w_image,
         study_folder=get_hcp_dir(),
@@ -47,7 +48,7 @@ rule hcp_postfreesurfer:
     shell:
         """
         module load hcppipelines 2>/dev/null || true
-        python workflow/scripts/hcp_helper.py \
+        python "{params.scripts_dir}"/hcp_helper.py \
             --study-folder "{params.study_folder}" \
             --subject "{params.subject}" \
             --fs-dir "{params.fs_dir}" \

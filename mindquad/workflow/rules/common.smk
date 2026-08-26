@@ -77,6 +77,11 @@ def get_output_dir() -> str:
     return str(config.get("output_dir", "."))
 
 
+def get_scripts_dir() -> str:
+    """Return the absolute path to the workflow scripts directory."""
+    return str(Path(workflow.basedir) / "scripts")
+
+
 def get_bids_dir() -> str:
     """Return the BIDS dataset root directory from configuration."""
     return str(Path(get_output_dir()) / config.get("bids_dir", "bids"))

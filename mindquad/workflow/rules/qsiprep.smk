@@ -15,6 +15,7 @@ rule qsiprep_participant:
         marker=get_qsiprep_dir() + "/sub-{subject}/.qsiprep_complete",
         report=get_qsiprep_dir() + "/sub-{subject}.html",
     params:
+        scripts_dir=get_scripts_dir(),
         bids_dir=get_bids_dir(),
         out_dir=get_qsiprep_dir(),
         subject="{subject}",
@@ -32,7 +33,7 @@ rule qsiprep_participant:
     threads: 2
     shell:
         """
-        python workflow/scripts/qsiprep_helper.py \
+        python "{params.scripts_dir}"/qsiprep_helper.py \
             --bids-dir "{params.bids_dir}" \
             --output-dir "{params.out_dir}" \
             --subject "{params.subject}" \

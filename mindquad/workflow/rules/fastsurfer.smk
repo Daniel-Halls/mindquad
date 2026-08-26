@@ -11,6 +11,7 @@ rule fastsurfer_subject:
         marker=get_fastsurfer_dir() + "/sub-{subject}/.fastsurfer_complete",
         seg=get_fastsurfer_dir() + "/sub-{subject}/mri/aparc.DKTatlas+aseg.deep.mgz",
     params:
+        scripts_dir=get_scripts_dir(),
         t1w=get_t1w_image,
         sd=get_fastsurfer_dir(),
         sid="sub-{subject}",
@@ -22,7 +23,7 @@ rule fastsurfer_subject:
     shell:
         """
         module load fastsurfer 2>/dev/null || true
-        python workflow/scripts/fastsurfer_helper.py \
+        python "{params.scripts_dir}"/fastsurfer_helper.py \
             --t1 "{params.t1w}" \
             --sd "{params.sd}" \
             --sid "{params.sid}" \
