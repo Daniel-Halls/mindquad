@@ -47,7 +47,7 @@ rule dcm2niix_convert_subject:
         """
 
 
-rule organize_bids_subject:
+checkpoint organize_bids_subject:
     """Organize converted NIfTI/JSON files into standard BIDS structure."""
     input:
         dataset_desc=get_bids_dir() + "/dataset_description.json",
