@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from workflow.scripts.hcp_helper import (
+from mindquad.workflow.scripts.hcp_helper import (
     HCPApp,
     HCPCommandBuilder,
     HCPConfig,

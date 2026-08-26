@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from workflow.scripts.fmriprep_helper import (
+from mindquad.workflow.scripts.fmriprep_helper import (
     FMRIPrepApp,
     FMRIPrepCommandBuilder,
     FMRIPrepConfig,

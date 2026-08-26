@@ -5,8 +5,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from workflow.scripts.bids_init import BIDSInitializer, BIDSMetadata
-from workflow.scripts.bids_organizer import (
+from mindquad.workflow.scripts.bids_init import BIDSInitializer, BIDSMetadata
+from mindquad.workflow.scripts.bids_organizer import (
     BIDSFilenameBuilder,
     BIDSModality,
     BIDSOrganizer,

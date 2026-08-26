@@ -2,8 +2,9 @@
 
 import os
 
-if os.path.exists("config/config.yaml"):
-    configfile: "config/config.yaml"
+default_config = os.path.join(workflow.basedir, "../config/config.yaml")
+if os.path.exists(default_config):
+    configfile: default_config
 
 include: "rules/common.smk"
 include: "rules/bids_setup.smk"

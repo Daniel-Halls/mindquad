@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from workflow.scripts.mrs_helper import (
+from mindquad.workflow.scripts.mrs_helper import (
     MRSApp,
     MRSConfig,
     MRSFitAlgorithm,
