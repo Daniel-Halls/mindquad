@@ -189,9 +189,13 @@ class FastSurferCommandBuilder:
         Returns:
             List of CLI command tokens.
         """
+        import shutil
+        executable = shutil.which("run_fastsurfer.sh") or "run_fastsurfer.sh"
+        
         clean_sid = subject_id.strip()
         cmd: List[str] = [
-            "run_fastsurfer.sh",
+            "bash",
+            executable,
             "--t1",
             str(t1_path),
             "--sd",
