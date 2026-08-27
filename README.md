@@ -4,30 +4,19 @@ Mindquad is a comprehensive, scalable Snakemake pipeline designed for preprocess
 
 ## Workflow Overview
 
-The pipeline strictly follows BIDS standards and integrates several state-of-the-art neuroimaging tools. 
+The pipeline strictly follows BIDS standards and integrates several neuroimaging tools. 
 
 ```mermaid
 graph TD
-    A[Raw DICOMs] -->|Step 1: dcm2niix| B(BIDS Directory)
-    B -->|Step 2| C[MRIQC]
-    C -->|Step 3| D[FastSurfer]
-    
-    D -->|Output| E[fMRIPrep]
-    B -->|T1w, BOLD| E
-    
-    D -->|Output| F[QSIPrep]
-    B -->|DWI| F
-    
-    B -->|T2w| G[Coregistration]
-    B -->|T1w| G
-    
-    E -->|Preprocessed fMRI| H[HCP PostFreeSurfer]
-    D -->|Output| H
-    G -->|Aligned T2| H
-    
-    B -->|MRS RAW| I[MRS Processing]
-    B -->|T1w| I
+    A[Raw DICOMs] --> B(BIDS)
+    B -->C(MRIQC)
+    B --> H[MRS Processing]
+    C -->D[FastSurfer]
+    D -->E[fMRIPrep]
+    D -->F[QSIPrep]    
+    D --> G[HCP PostFreeSurfer]
 ```
+    
 
 ### Processing Steps:
 1. **BIDS Setup**: Converts raw DICOMs to NIFTI format using `dcm2niix` and organizes them into a strict BIDS hierarchy.
