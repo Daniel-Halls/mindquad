@@ -68,43 +68,6 @@ source .venv/bin/activate
 pip install -e .
 ```
 
----
-
-## Customizing for Other Datasets
-
-This pipeline is highly adaptable and can be pointed to completely different raw datasets by modifying the `mindquad/config/config.yaml` file.
-
-### 1. Pointing to New Data
-Change the `raw_data_dir` to point to your new DICOM/raw data folder:
-```yaml
-raw_data_dir: "/path/to/your/new/dataset"
-```
-
-### 2. Subject Discovery
-By default, the pipeline will **auto-discover** any subject folders located inside `raw_data_dir` that do not start with a dot (`.`).
-If you want to run a specific subset of subjects, explicitly list them in the config:
-```yaml
-subjects:
-  - "subject_01"
-  - "subject_02"
-```
-
-### 3. Scaling CPU Cores
-Set cores in `mindquad/config/config.yaml`:
-```yaml
-threads: 16
-```
-*(Make sure to match this with the `--cores` flag when executing Snakemake!)*
-
-### 4. External Configuration Files
-You do not need to keep your configuration file inside the repository. You can maintain your own `.yaml` config file anywhere on your system and pass it to Snakemake at runtime using the `--configfile` argument. This is especially useful for managing different environments or datasets without modifying the repository.
-```bash
-snakemake -s mindquad/workflow/Snakefile --cores 16 --configfile /path/to/my_custom_dataset.yaml
-```
-*Note: This will override any settings present in the default `mindquad/config/config.yaml`. If you use an external config, you can safely delete `mindquad/config/config.yaml` from the repository.*
-
----
-
 ## Configuration Reference
 
 A template configuration file (`config_template.yaml`) is provided in the root of the repository. Below is a breakdown of all possible configuration options:
