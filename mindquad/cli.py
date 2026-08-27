@@ -7,6 +7,26 @@ import subprocess
 import sys
 from typing import List
 
+def ascii_art() -> str:
+    """
+    Returns ascii art
+    """
+    return r"""\033[95mL
+    MINDQUAD: Neuroimaging Analysis Pipeline 
+    for fMRI, MRS, Structural and Diffusion data
+    ===========================================
+      _---~~(~~-_.
+    _{        )   )
+  ,   ) -~~- ( ,-' )_
+ (  `-,_..`., )-- '_,)
+( ` _)  (  -~( -_ `,  }
+(_-  _  ~_-~~~~`,  ,' )
+  `~ -^(    __;-,((()))
+        ~~~~ {_ -_(())
+               `\  }
+                 { }
+\033[0m
+    """
 
 def parse_arguments() -> argparse.Namespace:
     """Parse command line arguments.
@@ -15,8 +35,8 @@ def parse_arguments() -> argparse.Namespace:
         argparse.Namespace: Parsed arguments.
     """
     parser = argparse.ArgumentParser(
-        description="Mindquad Pipeline CLI Wrapper",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        description=ascii_art(),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
         "-c",

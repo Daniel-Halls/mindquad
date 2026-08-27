@@ -2,27 +2,27 @@
 
 Mindquad is a comprehensive, scalable Snakemake pipeline designed for preprocessing and analyzing multimodal neuroimaging data, including functional MRI (fMRI), diffusion MRI (dMRI), structural imaging, and Magnetic Resonance Spectroscopy (MRS).
 
-## 🚀 Workflow Overview
+## Workflow Overview
 
 The pipeline strictly follows BIDS standards and integrates several state-of-the-art neuroimaging tools. 
 
 ```mermaid
 graph TD
     A[Raw DICOMs] -->|Step 1: dcm2niix| B(BIDS Directory)
-    B -->|Step 2| C{MRIQC}
-    B -->|Step 3| D[FastSurfer]
+    B -->|Step 2| C[MRIQC]
+    C -->|Step 3| D[FastSurfer]
     
-    D -->|Surfaces| E[fMRIPrep]
+    D -->|Output| E[fMRIPrep]
     B -->|T1w, BOLD| E
     
-    D -->|Surfaces| F[QSIPrep]
+    D -->|Output| F[QSIPrep]
     B -->|DWI| F
     
     B -->|T2w| G[Coregistration]
     B -->|T1w| G
     
     E -->|Preprocessed fMRI| H[HCP PostFreeSurfer]
-    D -->|Surfaces| H
+    D -->|Output| H
     G -->|Aligned T2| H
     
     B -->|MRS RAW| I[MRS Processing]
@@ -41,7 +41,7 @@ graph TD
 
 ---
 
-## 🛠️ Environment Setup & Installation
+## Environment Setup & Installation
 
 This pipeline relies on a mix of High-Performance Computing (HPC) modules and localized Python packages.
 
@@ -72,7 +72,7 @@ pip install -e .
 
 ---
 
-## ⚙️ Customizing for Other Datasets
+## Customizing for Other Datasets
 
 This pipeline is highly adaptable and can be pointed to completely different raw datasets by modifying the `mindquad/config/config.yaml` file.
 
@@ -92,7 +92,7 @@ subjects:
 ```
 
 ### 3. Scaling CPU Cores
-Previous strict CPU limits have been removed! You can now scale up the pipeline to use the full power of your machine. Update the global or tool-specific `threads` limit in `mindquad/config/config.yaml`:
+Set cores in `mindquad/config/config.yaml`:
 ```yaml
 threads: 16
 ```
@@ -107,7 +107,7 @@ snakemake -s mindquad/workflow/Snakefile --cores 16 --configfile /path/to/my_cus
 
 ---
 
-## 📄 Configuration Reference
+## Configuration Reference
 
 A template configuration file (`config_template.yaml`) is provided in the root of the repository. Below is a breakdown of all possible configuration options:
 
@@ -141,7 +141,7 @@ Each tool has its own configuration block (e.g., `mriqc:`, `fastsurfer:`). Commo
 
 ---
 
-## 💻 Execution Instructions
+## Execution Instructions
 
 Ensure you have activated your virtual environment before running Snakemake.
 
