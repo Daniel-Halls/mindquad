@@ -28,3 +28,6 @@ dev = [
     "flake8>=3.9.0",
     "black>=22.0.0"
 ]
+
+[project.scripts]
+mindquad = "mindquad.cli:main"

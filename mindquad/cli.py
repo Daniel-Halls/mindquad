@@ -1,0 +1,122 @@
+"""Command line interface for the mindquad pipeline."""
+
+import argparse
+import os
+import shlex
+import subprocess
+import sys
+from typing import List
+
+
+def parse_arguments() -> argparse.Namespace:
+    """Parse command line arguments.
+
+    Returns:
+        argparse.Namespace: Parsed arguments.
+    """
+    parser = argparse.ArgumentParser(
+        description="Mindquad Pipeline CLI Wrapper",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    parser.add_argument(
+        "-c",
+        "--config",
+        required=True,
+        type=str,
+        help="Path to the pipeline configuration YAML file.",
+    )
+    parser.add_argument(
+        "-n",
+        "--cores",
+        type=int,
+        default=1,
+        help="Number of cores to use.",
+    )
+    parser.add_argument(
+        "-s",
+        "--submit",
+        type=str,
+        help="HPC config file (Snakemake profile).",
+    )
+    parser.add_argument(
+        "-m",
+        "--makefile",
+        type=str,
+        help="File containing additional snakemake arguments.",
+    )
+
+    return parser.parse_args()
+
+
+def build_snakemake_command(args: argparse.Namespace, snakefile_path: str) -> List[str]:
+    """Build the Snakemake command list from the given arguments.
+
+    Args:
+        args: Parsed command line arguments.
+        snakefile_path: Absolute path to the main Snakefile.
+
+    Returns:
+        List[str]: A list of strings representing the Snakemake command.
+    """
+    cmd = [
+        "snakemake",
+        "--snakefile",
+        snakefile_path,
+        "--configfile",
+        args.config,
+        "--cores",
+        str(args.cores),
+    ]
+
+    if args.submit:
+        cmd.extend(["--profile", args.submit])
+
+    if args.makefile:
+        if not os.path.isfile(args.makefile):
+            print(
+                f"Error: Additional arguments file not found: {args.makefile}",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
+        with open(args.makefile, "r", encoding="utf-8") as file_handle:
+            extra_args_raw = file_handle.read().strip()
+
+        if extra_args_raw:
+            extra_args = shlex.split(extra_args_raw)
+            cmd.extend(extra_args)
+
+    return cmd
+
+
+def main() -> None:
+    """Main entrypoint for the CLI wrapper."""
+    args = parse_arguments()
+
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    snakefile_path = os.path.join(current_dir, "workflow", "Snakefile")
+
+    if not os.path.isfile(snakefile_path):
+        print(
+            f"Error: Could not locate Snakefile at expected path: {snakefile_path}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    cmd = build_snakemake_command(args, snakefile_path)
+
+    try:
+        subprocess.run(cmd, check=True)
+    except subprocess.CalledProcessError as error:
+        print(
+            f"Snakemake execution failed with return code {error.returncode}.",
+            file=sys.stderr,
+        )
+        sys.exit(error.returncode)
+    except KeyboardInterrupt:
+        print("\nExecution interrupted by user.", file=sys.stderr)
+        sys.exit(130)
+
+
+if __name__ == "__main__":
+    main()
