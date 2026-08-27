@@ -62,7 +62,7 @@ def parse_arguments() -> argparse.Namespace:
         "-m",
         "--makefile",
         type=str,
-        help="File containing additional snakemake arguments.",
+        help="YAML file containing additional snakemake arguments.",
     )
 
     return parser.parse_args()
@@ -99,11 +99,27 @@ def build_snakemake_command(args: argparse.Namespace, snakefile_path: str) -> Li
             )
             sys.exit(1)
 
+        import yaml
+        
         with open(args.makefile, "r", encoding="utf-8") as file_handle:
-            extra_args_raw = file_handle.read().strip()
+            try:
+                data = yaml.safe_load(file_handle)
+            except yaml.YAMLError as exc:
+                print(f"Error parsing YAML makefile: {exc}", file=sys.stderr)
+                sys.exit(1)
 
-        if extra_args_raw:
-            extra_args = shlex.split(extra_args_raw)
+        extra_args = []
+        if isinstance(data, list):
+            extra_args = [str(x) for x in data]
+        elif isinstance(data, dict):
+            for k, v in data.items():
+                if isinstance(v, bool):
+                    if v:
+                        extra_args.append(f"--{k}")
+                else:
+                    extra_args.extend([f"--{k}", str(v)])
+                    
+        if extra_args:
             cmd.extend(extra_args)
 
     return cmd

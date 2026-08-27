@@ -157,8 +157,8 @@ To run the pipeline locally, use the `mindquad` command and point it to your con
 # Execute the pipeline using 8 cores
 mindquad -c /path/to/config.yaml -n 8
 
-# You can also pass additional Snakemake arguments using a text file
-mindquad -c /path/to/config.yaml -n 8 -m extra_args.txt
+# You can also pass additional Snakemake arguments using a YAML file
+mindquad -c /path/to/config.yaml -n 8 -m extra_args.yaml
 ```
 
 ### Running on an HPC Cluster (SLURM)
