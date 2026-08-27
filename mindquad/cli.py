@@ -93,6 +93,13 @@ def main() -> None:
     """Main entrypoint for the CLI wrapper."""
     args = parse_arguments()
 
+    if not os.path.isfile(args.config):
+        print(
+            f"Error: Config file not found: {args.config}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
     current_dir = os.path.dirname(os.path.abspath(__file__))
     snakefile_path = os.path.join(current_dir, "workflow", "Snakefile")
 
@@ -113,6 +120,12 @@ def main() -> None:
             file=sys.stderr,
         )
         sys.exit(error.returncode)
+    except FileNotFoundError:
+        print(
+            "Error: 'snakemake' command not found. Please ensure it is installed and in your PATH.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
     except KeyboardInterrupt:
         print("\nExecution interrupted by user.", file=sys.stderr)
         sys.exit(130)
