@@ -143,27 +143,44 @@ Each tool has its own configuration block (e.g., `mriqc:`, `fastsurfer:`). Commo
 
 ## Execution Instructions
 
-Ensure you have activated your virtual environment before running Snakemake.
+Ensure you have activated your virtual environment and installed the package.
 
 ```bash
 source .venv/bin/activate
+pip install -e .
 ```
 
+This installation registers the `mindquad` CLI wrapper, which abstracts away the underlying Snakemake commands and makes running the pipeline incredibly easy!
+
 ### Running Locally
-To test the pipeline locally, you can run Snakemake directly. 
+To run the pipeline locally, use the `mindquad` command and point it to your configuration file:
 
 ```bash
-# Dry-run to preview the execution plan
-snakemake -s mindquad/workflow/Snakefile -n
+# Execute the pipeline using 8 cores
+mindquad -c /path/to/config.yaml -n 8
 
-# Execute the pipeline using 2 cores
-snakemake -s mindquad/workflow/Snakefile --cores 2
+# You can also pass additional Snakemake arguments using a text file
+mindquad -c /path/to/config.yaml -n 8 -m extra_args.txt
 ```
 
 ### Running on an HPC Cluster (SLURM)
-To run the full pipeline on a cluster, you must submit it via a Snakemake profile. Do **not** use `--cores` higher than 2 if running on a login node. Instead, let Snakemake submit individual jobs:
+To run the full pipeline on a cluster, you can use the `-s` or `--submit` flag to pass a Snakemake profile. This allows Snakemake to act as an orchestrator, submitting individual pipeline steps as separate SLURM jobs!
 
 ```bash
-snakemake -s mindquad/workflow/Snakefile --profile slurm
+mindquad -c /path/to/config.yaml -s slurm
 ```
 *(Ensure you have a `.config/snakemake/slurm` profile configured for your specific HPC environment).*
+
+---
+
+## Intelligent Pipeline Features
+
+### Dynamic Data Detection (Checkpoints)
+You do not need to manually configure the pipeline to skip modules if your dataset is missing modalities. Mindquad uses **Snakemake Checkpoints** at the BIDS conversion step. 
+
+The pipeline will automatically pause, scan the generated BIDS directories for each subject, and dynamically turn off downstream pipelines if the data doesn't exist. For example, if a subject has no `dwi/` folder, QSIPrep is automatically omitted for that subject. If the dataset has no `mrs/` folder, the MRS pipeline is completely skipped!
+
+### Native Parallel Execution
+Because Mindquad's dependencies are strictly defined, Snakemake inherently knows which steps can run simultaneously. Once the FastSurfer and BIDS steps complete, **fMRIPrep**, **QSIPrep**, and **MRS** are 100% independent. 
+
+If you supply enough cores (e.g., `mindquad -n 16`), or submit the pipeline to a SLURM cluster, Snakemake will automatically launch these three pipelines at the exact same time!
