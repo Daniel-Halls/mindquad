@@ -117,7 +117,7 @@ def get_mriqc_modalities() -> str:
 
 def get_mriqc_extra_args() -> str:
     """Return extra CLI flags for MRIQC from config."""
-    default_args = "--verbose-reports --no-sub"
+    default_args = "--verbose-reports --no-sub --notrack"
     return str(config.get("mriqc", {}).get("args", default_args))
 
 
