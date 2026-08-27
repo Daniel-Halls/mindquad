@@ -408,6 +408,19 @@ class FastSurferRunner:
         env["OMP_NUM_THREADS"] = str(threads)
         env["OPENBLAS_NUM_THREADS"] = str(threads)
         env["MKL_NUM_THREADS"] = str(threads)
+        
+        # Ensure Singularity/Apptainer mounts host directories
+        bind_paths = "/imgshare,/gpfs01"
+        if "SINGULARITY_BIND" in env:
+            env["SINGULARITY_BIND"] += f",{bind_paths}"
+        else:
+            env["SINGULARITY_BIND"] = bind_paths
+            
+        if "APPTAINER_BIND" in env:
+            env["APPTAINER_BIND"] += f",{bind_paths}"
+        else:
+            env["APPTAINER_BIND"] = bind_paths
+            
         if fs_license and fs_license.strip():
             env["FS_LICENSE"] = str(fs_license).strip()
         return env
