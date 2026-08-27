@@ -7,6 +7,7 @@ rule mrs_processing:
     """Run MRS preprocessing, voxel tissue segmentation, and spectral fitting with FSL-MRS."""
     input:
         bids_marker=get_bids_dir() + "/sub-{subject}/.bids_organized",
+        fastsurfer_marker=get_fastsurfer_dir() + "/sub-{subject}/.fastsurfer_complete",
     output:
         marker=get_mrs_dir() + "/sub-{subject}/.mrs_complete",
         report=get_mrs_dir() + "/sub-{subject}.html",

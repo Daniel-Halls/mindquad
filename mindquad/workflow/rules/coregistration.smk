@@ -7,6 +7,7 @@ rule coregister_t2_to_t1:
     """Run diffeomorphic SyN alignment of T2w to T1w structural scan."""
     input:
         bids_marker=get_bids_dir() + "/sub-{subject}/.bids_organized",
+        fastsurfer_marker=get_fastsurfer_dir() + "/sub-{subject}/.fastsurfer_complete",
     output:
         marker=(
             get_coregistration_dir() + "/sub-{subject}/.coregistration_complete"
