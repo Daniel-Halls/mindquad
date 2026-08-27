@@ -2,32 +2,30 @@
 
 Mindquad is a comprehensive, scalable Snakemake pipeline designed for preprocessing and analyzing multimodal neuroimaging data, including functional MRI (fMRI), diffusion MRI (dMRI), structural imaging, and Magnetic Resonance Spectroscopy (MRS).
 
-## 🚀 Workflow Overview
+## Workflow Overview
 
-The pipeline strictly follows BIDS standards and integrates several state-of-the-art neuroimaging tools. 
+The pipeline strictly follows BIDS standards and integrates several neuroimaging tools. 
 
 ```mermaid
 graph TD
-    A[Raw DICOMs] -->|Step 1: dcm2niix| B(BIDS Directory)
-    B -->|Step 2| C{MRIQC}
-    B -->|Step 3| D[FastSurfer]
-    
-    D -->|Surfaces| E[fMRIPrep]
-    B -->|T1w, BOLD| E
-    
-    D -->|Surfaces| F[QSIPrep]
-    B -->|DWI| F
-    
-    B -->|T2w| G[Coregistration]
-    B -->|T1w| G
-    
-    E -->|Preprocessed fMRI| H[HCP PostFreeSurfer]
-    D -->|Surfaces| H
-    G -->|Aligned T2| H
-    
-    B -->|MRS RAW| I[MRS Processing]
-    B -->|T1w| I
+    A[Raw DICOMs] --> B(BIDS)
+    B -->C(MRIQC)
+    B --> H[MRS Processing]
+    C -->D(FastSurfer)
+    D -->E[fMRIPrep]
+    D -->F[QSIPrep]    
+    D --> G[HCP PostFreeSurfer]
+
+    style A fill:#7d00fa,stroke:#06013b,stroke-width:4px,color:#f7f7f7
+    style B fill:#7d00fa,stroke:#06013b,stroke-width:4px,color:#f7f7f7
+    style C fill:#01036b,stroke:#06013b,stroke-width:4px,color:#f7f7f7
+    style D fill:#8304ba,stroke:#06013b,stroke-width:4px,color:#f7f7f7
+    style E fill:#a804ba,stroke:#06013b,stroke-width:4px,color:#f7f7f7
+    style F fill:#a804ba,stroke:#06013b,stroke-width:4px,color:#f7f7f7
+    style G fill:#a804ba,stroke:#06013b,stroke-width:4px,color:#f7f7f7
+    style H fill:#7a0132,stroke:#06013b,stroke-width:4px,color:#f7f7f7
 ```
+    
 
 ### Processing Steps:
 1. **BIDS Setup**: Converts raw DICOMs to NIFTI format using `dcm2niix` and organizes them into a strict BIDS hierarchy.
@@ -41,7 +39,7 @@ graph TD
 
 ---
 
-## 🛠️ Environment Setup & Installation
+## Environment Setup & Installation
 
 This pipeline relies on a mix of High-Performance Computing (HPC) modules and localized Python packages.
 
@@ -72,7 +70,7 @@ pip install -e .
 
 ---
 
-## ⚙️ Customizing for Other Datasets
+## Customizing for Other Datasets
 
 This pipeline is highly adaptable and can be pointed to completely different raw datasets by modifying the `mindquad/config/config.yaml` file.
 
@@ -92,7 +90,7 @@ subjects:
 ```
 
 ### 3. Scaling CPU Cores
-Previous strict CPU limits have been removed! You can now scale up the pipeline to use the full power of your machine. Update the global or tool-specific `threads` limit in `mindquad/config/config.yaml`:
+Set cores in `mindquad/config/config.yaml`:
 ```yaml
 threads: 16
 ```
@@ -107,7 +105,7 @@ snakemake -s mindquad/workflow/Snakefile --cores 16 --configfile /path/to/my_cus
 
 ---
 
-## 📄 Configuration Reference
+## Configuration Reference
 
 A template configuration file (`config_template.yaml`) is provided in the root of the repository. Below is a breakdown of all possible configuration options:
 
@@ -141,29 +139,46 @@ Each tool has its own configuration block (e.g., `mriqc:`, `fastsurfer:`). Commo
 
 ---
 
-## 💻 Execution Instructions
+## Execution Instructions
 
-Ensure you have activated your virtual environment before running Snakemake.
+Ensure you have activated your virtual environment and installed the package.
 
 ```bash
 source .venv/bin/activate
+pip install -e .
 ```
 
+This installation registers the `mindquad` CLI wrapper, which abstracts away the underlying Snakemake commands and makes running the pipeline incredibly easy!
+
 ### Running Locally
-To test the pipeline locally, you can run Snakemake directly. 
+To run the pipeline locally, use the `mindquad` command and point it to your configuration file:
 
 ```bash
-# Dry-run to preview the execution plan
-snakemake -s mindquad/workflow/Snakefile -n
+# Execute the pipeline using 8 cores
+mindquad -c /path/to/config.yaml -n 8
 
-# Execute the pipeline using 2 cores
-snakemake -s mindquad/workflow/Snakefile --cores 2
+# You can also pass additional Snakemake arguments using a YAML file
+mindquad -c /path/to/config.yaml -n 8 -m extra_args.yaml
 ```
 
 ### Running on an HPC Cluster (SLURM)
-To run the full pipeline on a cluster, you must submit it via a Snakemake profile. Do **not** use `--cores` higher than 2 if running on a login node. Instead, let Snakemake submit individual jobs:
+To run the full pipeline on a cluster, you can use the `-s` or `--submit` flag to pass a Snakemake profile. This allows Snakemake to act as an orchestrator, submitting individual pipeline steps as separate SLURM jobs!
 
 ```bash
-snakemake -s mindquad/workflow/Snakefile --profile slurm
+mindquad -c /path/to/config.yaml -s slurm
 ```
 *(Ensure you have a `.config/snakemake/slurm` profile configured for your specific HPC environment).*
+
+---
+
+## Intelligent Pipeline Features
+
+### Dynamic Data Detection (Checkpoints)
+You do not need to manually configure the pipeline to skip modules if your dataset is missing modalities. Mindquad uses **Snakemake Checkpoints** at the BIDS conversion step. 
+
+The pipeline will automatically pause, scan the generated BIDS directories for each subject, and dynamically turn off downstream pipelines if the data doesn't exist. For example, if a subject has no `dwi/` folder, QSIPrep is automatically omitted for that subject. If the dataset has no `mrs/` folder, the MRS pipeline is completely skipped!
+
+### Native Parallel Execution
+Because Mindquad's dependencies are strictly defined, Snakemake inherently knows which steps can run simultaneously. Once the FastSurfer and BIDS steps complete, **fMRIPrep**, **QSIPrep**, and **MRS** are 100% independent. 
+
+If you supply enough cores (e.g., `mindquad -n 16`), or submit the pipeline to a SLURM cluster, Snakemake will automatically launch these three pipelines at the exact same time!
