@@ -11,10 +11,14 @@ graph TD
     A[Raw DICOMs] --> B(BIDS)
     B -->C(MRIQC)
     B --> H[MRS Processing]
-    C -->D[FastSurfer]
+    C -->D(FastSurfer)
     D -->E[fMRIPrep]
     D -->F[QSIPrep]    
     D --> G[HCP PostFreeSurfer]
+
+    style A fill:#f9d0c4,stroke:#333,stroke-width:2px
+    style B fill:#b5e2fa,stroke:#333,stroke-width:2px
+    style E fill:#e2f0cb,stroke:#333,stroke-width:4px,color:#d83b01
 ```
     
 
