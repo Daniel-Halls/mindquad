@@ -16,8 +16,9 @@ graph TD
     D -->F[QSIPrep]    
     D --> G[HCP PostFreeSurfer]
 
-    style A fill:#f9d0c4,stroke:#333,stroke-width:2px
-    style B fill:#b5e2fa,stroke:#333,stroke-width:2px
+    style A fill:#7d00fa,stroke:#333,stroke-width:2px
+    style B fill:#7d00fa,stroke:#333,stroke-width:2px
+    style C fill:#01036b,stroke:#333,stroke-width:4px,color:#d83b01
     style E fill:#e2f0cb,stroke:#333,stroke-width:4px,color:#d83b01
 ```
     
