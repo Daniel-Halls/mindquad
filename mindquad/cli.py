@@ -11,22 +11,24 @@ def ascii_art() -> str:
     """
     Returns ascii art
     """
-    return r"""\033[95mL
+    pink = '\033[95m'
+    reset = '\033[0m'
+    return f"{pink}" + r"""
     MINDQUAD: Neuroimaging Analysis Pipeline 
     for fMRI, MRS, Structural and Diffusion data
     ===========================================
-      _---~~(~~-_.
-    _{        )   )
-  ,   ) -~~- ( ,-' )_
- (  `-,_..`., )-- '_,)
-( ` _)  (  -~( -_ `,  }
-(_-  _  ~_-~~~~`,  ,' )
-  `~ -^(    __;-,((()))
-        ~~~~ {_ -_(())
-               `\  }
-                 { }
-\033[0m
-    """
+          _---~~(~~-_.
+        _{        )   )
+      ,   ) -~~- ( ,-' )_
+     (  `-,_..`., )-- '_,)
+    ( ` _)  (  -~( -_ `,  }
+    (_-  _  ~_-~~~~`,  ,' )
+      `~ -^(    __;-,((()))
+            ~~~~ {_ -_(())
+                   `\  }
+                     { }
+    
+""" + f"{reset}"
 
 def parse_arguments() -> argparse.Namespace:
     """Parse command line arguments.
