@@ -293,7 +293,7 @@ class MRIQCRunner:
         bash_script = (
             "source /usr/share/Modules/init/bash >/dev/null 2>&1 || true && "
             "module load singularity/3.8.5 >/dev/null 2>&1 || true && "
-            f"singularity exec --cleanenv {container_path} "
+            f"singularity exec --cleanenv -B /imgshare,/gpfs01 {container_path} "
             "\"$@\""
         )
         return ["bash", "-c", bash_script, "--"] + cmd
