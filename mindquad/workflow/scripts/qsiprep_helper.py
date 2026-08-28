@@ -527,6 +527,18 @@ class QSIPrepRunner:
         """Initialize QSIPrepRunner with logger."""
         self._logger = logging.getLogger(self.__class__.__name__)
 
+    def _wrap_with_singularity(self, cmd: List[str]) -> List[str]:
+        """Wrap command with Singularity execution."""
+        container_path = "/imgshare/tES-FUS/containers/qsiprep_latest.sif"
+        
+        bash_script = (
+            "source /usr/share/Modules/init/bash >/dev/null 2>&1 || true && "
+            "module load singularity/3.8.5 >/dev/null 2>&1 || true && "
+            f"singularity exec --cleanenv -B /imgshare,/gpfs01 {container_path} "
+            "\"$@\""
+        )
+        return ["bash", "-c", bash_script, "--"] + cmd
+
     def prepare_environment(
         self,
         tmp_dir: Path,
@@ -551,6 +563,19 @@ class QSIPrepRunner:
         env["MKL_NUM_THREADS"] = str(threads)
         if fs_license and fs_license.strip():
             env["FS_LICENSE"] = str(fs_license).strip()
+            
+        # Ensure Singularity/Apptainer mounts host directories
+        bind_paths = "/imgshare,/gpfs01"
+        if "SINGULARITY_BIND" in env:
+            env["SINGULARITY_BIND"] += f",{bind_paths}"
+        else:
+            env["SINGULARITY_BIND"] = bind_paths
+            
+        if "APPTAINER_BIND" in env:
+            env["APPTAINER_BIND"] += f",{bind_paths}"
+        else:
+            env["APPTAINER_BIND"] = bind_paths
+            
         return env
 
     def ensure_report_file(
@@ -668,6 +693,7 @@ class QSIPrepRunner:
         env = self.prepare_environment(tmp_dir, threads, fs_license)
 
         self._logger.info("Executing QSIPrep command: %s", " ".join(cmd))
+        cmd = self._wrap_with_singularity(cmd)
         result = subprocess.run(cmd, env=env, check=False)
 
         if result.returncode != 0:
