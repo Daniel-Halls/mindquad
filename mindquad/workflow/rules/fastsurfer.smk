@@ -7,7 +7,7 @@ rule fastsurfer_subject:
     """Run FastSurfer deep-learning whole-brain segmentation and surface reconstruction on T1w image."""
     input:
         bids_marker=get_bids_dir() + "/sub-{subject}/.bids_organized",
-        mriqc_marker=get_mriqc_dir() + "/sub-{subject}/.mriqc_complete",
+        mriqc_group_marker=get_mriqc_dir() + "/.mriqc_group_complete",
     output:
         marker=get_fastsurfer_dir() + "/sub-{subject}/.fastsurfer_complete",
         seg=get_fastsurfer_dir() + "/sub-{subject}/mri/aparc.DKTatlas+aseg.deep.mgz",
