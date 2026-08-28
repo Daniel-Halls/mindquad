@@ -287,10 +287,11 @@ class MRIQCRunner:
         self._logger = logging.getLogger(self.__class__.__name__)
 
     def _wrap_with_neuroimaging_env(self, cmd: List[str]) -> List[str]:
-        """Wrap command with full FreeSurfer, FSL, and ANTs bash environment."""
+        """Wrap command with full FreeSurfer, FSL, ANTs, and AFNI bash environment."""
         fs_home = "/gpfs01/software/imaging/freesurfer/8.2.0-1"
         fsl_home = "/software/imaging/fsl/6.0.6.3"
         ants_path = "/gpfs01/software/imaging/ANTs/ants-2.6.2/bin"
+        afni_path = "/gpfs01/software/afni-24.1.06/binary/bin"
         
         bash_script = (
             f"export FREESURFER_HOME={fs_home} && "
@@ -298,7 +299,8 @@ class MRIQCRunner:
             f"export FSLDIR={fsl_home} && "
             f"source {fsl_home}/etc/fslconf/fsl.sh >/dev/null 2>&1 || true && "
             f"export ANTSPATH={ants_path}/ && "
-            f"export PATH={ants_path}:$PATH && "
+            f"export AFNIDIR={afni_path} && "
+            f"export PATH={ants_path}:{afni_path}:$PATH && "
             "\"$@\""
         )
         return ["bash", "-c", bash_script, "--"] + cmd
