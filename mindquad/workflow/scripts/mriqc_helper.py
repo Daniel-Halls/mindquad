@@ -56,12 +56,7 @@ class MRIQCConfig:
         )
         self._threads = threads
         self._mem_gb = mem_gb
-        
-        # Force disable migas telemetry to prevent crashing due to API mismatch
-        if "--notrack" not in extra_args:
-            extra_args = f"{extra_args} --notrack".strip()
-            
-        self._extra_args = extra_args
+        self._extra_args = extra_args if extra_args is not None else ""
         self._bids_dir = bids_dir
         self._derivatives_dir = derivatives_dir
         self._work_dir = work_dir
