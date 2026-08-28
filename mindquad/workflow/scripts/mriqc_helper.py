@@ -304,8 +304,16 @@ class MRIQCRunner:
         env["OMP_NUM_THREADS"] = str(threads)
         env["OPENBLAS_NUM_THREADS"] = str(threads)
         env["MKL_NUM_THREADS"] = str(threads)
+        
+        # Inject FreeSurfer environment to satisfy MRIQC's SynthStrip dependency
+        fs_home = "/gpfs01/software/imaging/freesurfer/8.2.0-1"
+        env["FREESURFER_HOME"] = fs_home
+        if "PATH" in env:
+            env["PATH"] = f"{fs_home}/bin:{env['PATH']}"
+        else:
+            env["PATH"] = f"{fs_home}/bin"
+            
         return env
-
     def _ensure_report_file(
         self, output_dir: Path, subject: str, target_report: Optional[Path]
     ) -> Optional[Path]:
