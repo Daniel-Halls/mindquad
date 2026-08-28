@@ -110,9 +110,19 @@ def get_tmp_dir() -> str:
 def get_mriqc_modalities() -> str:
     """Return space-separated list of MRIQC modalities from config."""
     modalities = config.get("mriqc", {}).get(
-        "modalities", ["T1w", "bold", "dwi"]
+        "modalities", ["T1w", "bold"]
     )
     return " ".join(modalities)
+
+
+def get_mriqc_threads() -> int:
+    """Return configured MRIQC thread count."""
+    return int(config.get("mriqc", {}).get("threads", 2))
+
+
+def get_bids_threads() -> int:
+    """Return configured BIDS setup thread count."""
+    return int(config.get("bids", {}).get("threads", 2))
 
 
 def get_mriqc_extra_args() -> str:

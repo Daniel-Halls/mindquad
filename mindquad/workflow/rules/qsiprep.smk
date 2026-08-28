@@ -30,7 +30,7 @@ rule qsiprep_participant:
         ),
         tmp_dir=get_tmp_dir(),
         extra_args=get_qsiprep_extra_args(),
-    threads: 2
+    threads: get_qsiprep_threads()
     shell:
         """
         python "{params.scripts_dir}"/qsiprep_helper.py \

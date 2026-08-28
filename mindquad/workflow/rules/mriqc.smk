@@ -22,7 +22,7 @@ rule mriqc_participant:
         ),
         tmp_dir=get_tmp_dir(),
         extra_args=get_mriqc_extra_args(),
-    threads: 2
+    threads: get_mriqc_threads()
     shell:
         """
         python "{params.scripts_dir}"/mriqc_helper.py participant \
@@ -56,7 +56,7 @@ rule mriqc_group:
         work_dir=str(Path(get_work_dir()) / "mriqc" / "group"),
         tmp_dir=get_tmp_dir(),
         extra_args=get_mriqc_extra_args(),
-    threads: 2
+    threads: get_mriqc_threads()
     shell:
         """
         python "{params.scripts_dir}"/mriqc_helper.py group \

@@ -44,10 +44,10 @@ rule hcp_postfreesurfer:
         ref_myelin_maps=get_hcp_ref_myelin_maps(),
         tmp_dir=get_tmp_dir(),
         extra_args=get_hcp_extra_args(),
-    threads: 2
+    threads: get_hcp_threads()
     shell:
         """
-        module load hcppipelines 2>/dev/null || true
+        module load extension/imaging hcp-pipelines-img 2>/dev/null || true
         python "{params.scripts_dir}"/hcp_helper.py \
             --study-folder "{params.study_folder}" \
             --subject "{params.subject}" \

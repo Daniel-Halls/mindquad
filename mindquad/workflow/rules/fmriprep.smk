@@ -29,10 +29,10 @@ rule fmriprep_participant:
         ),
         tmp_dir=get_tmp_dir(),
         extra_args=get_fmriprep_extra_args(),
-    threads: 2
+    threads: get_fmriprep_threads()
     shell:
         """
-        module load fmriprep 2>/dev/null || true
+        module load extension/imaging fmriprep-img 2>/dev/null || true
         python "{params.scripts_dir}"/fmriprep_helper.py \
             --bids-dir "{params.bids_dir}" \
             --output-dir "{params.out_dir}" \

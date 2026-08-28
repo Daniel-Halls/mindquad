@@ -37,7 +37,7 @@ rule dcm2niix_convert_subject:
         out_dir=get_work_dir() + "/sub-{subject}/dcm2niix",
         tmp_dir=get_tmp_dir(),
         args=config.get("dcm2niix", {}).get("args", "-z y -b y -ba y -f %p_%s"),
-    threads: 2
+    threads: get_bids_threads()
     shell:
         """
         module load dcm2niix-img 2>/dev/null || module load dcm2niix 2>/dev/null || true
@@ -59,7 +59,7 @@ checkpoint organize_bids_subject:
         input_dir=get_work_dir() + "/sub-{subject}/dcm2niix",
         bids_dir=get_bids_dir(),
         subject="{subject}",
-    threads: 1
+    threads: get_bids_threads()
     shell:
         """
         python "{params.scripts_dir}"/bids_organizer.py \

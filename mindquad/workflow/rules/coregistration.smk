@@ -31,7 +31,7 @@ rule coregister_t2_to_t1:
         step_length=get_coregistration_step_length(),
         tmp_dir=get_tmp_dir(),
         extra_args=get_coregistration_extra_args(),
-    threads: 2
+    threads: get_coregistration_threads()
     shell:
         """
         python "{params.scripts_dir}"/coregistration_helper.py \

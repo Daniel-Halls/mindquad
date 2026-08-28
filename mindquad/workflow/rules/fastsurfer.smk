@@ -20,7 +20,7 @@ rule fastsurfer_subject:
         fs_license=get_fastsurfer_license(),
         extra_args=get_fastsurfer_extra_args(),
         tmp_dir=get_tmp_dir(),
-    threads: 2
+    threads: get_fastsurfer_threads()
     shell:
         """
         module load extension/imaging fastsurfer-img 2>/dev/null || true

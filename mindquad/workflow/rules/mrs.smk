@@ -32,7 +32,7 @@ rule mrs_processing:
         ),
         tmp_dir=get_tmp_dir(),
         extra_args=get_mrs_extra_args(),
-    threads: 2
+    threads: get_mrs_threads()
     shell:
         """
         python "{params.scripts_dir}"/mrs_helper.py \
