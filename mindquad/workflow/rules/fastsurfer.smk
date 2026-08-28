@@ -24,6 +24,7 @@ rule fastsurfer_subject:
     shell:
         """
         module load extension/imaging fastsurfer-img 2>/dev/null || true
+        module load cuda-img 2>/dev/null || true
         python "{params.scripts_dir}"/fastsurfer_helper.py \
             --t1 "{params.t1w}" \
             --sd "{params.sd}" \
