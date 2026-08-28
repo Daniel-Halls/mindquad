@@ -294,9 +294,10 @@ def get_fmriprep_cifti_output() -> str:
 
 def get_fmriprep_fs_subjects_dir() -> str:
     """Return FreeSurfer/FastSurfer subjects directory for fMRIPrep."""
-    return str(
-        config.get("fmriprep", {}).get("fs_subjects_dir", get_fastsurfer_dir())
-    )
+    fs_dir = config.get("fmriprep", {}).get("fs_subjects_dir", get_fastsurfer_dir())
+    if not __import__("pathlib").Path(fs_dir).is_absolute():
+        fs_dir = str(__import__("pathlib").Path(get_output_dir()) / fs_dir)
+    return str(__import__("pathlib").Path(fs_dir).resolve())
 
 
 def get_fmriprep_fs_license() -> str:
@@ -350,9 +351,10 @@ def get_qsiprep_separate_all_dwis() -> bool:
 
 def get_qsiprep_fs_subjects_dir() -> str:
     """Return FreeSurfer/FastSurfer subjects directory for QSIPrep."""
-    return str(
-        config.get("qsiprep", {}).get("fs_subjects_dir", get_fastsurfer_dir())
-    )
+    fs_dir = config.get("qsiprep", {}).get("fs_subjects_dir", get_fastsurfer_dir())
+    if not __import__("pathlib").Path(fs_dir).is_absolute():
+        fs_dir = str(__import__("pathlib").Path(get_output_dir()) / fs_dir)
+    return str(__import__("pathlib").Path(fs_dir).resolve())
 
 
 def get_qsiprep_fs_license() -> str:
