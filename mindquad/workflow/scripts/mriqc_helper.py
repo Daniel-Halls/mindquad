@@ -286,6 +286,23 @@ class MRIQCRunner:
         """Initialize MRIQCRunner with logger."""
         self._logger = logging.getLogger(self.__class__.__name__)
 
+    def _wrap_with_neuroimaging_env(self, cmd: List[str]) -> List[str]:
+        """Wrap command with full FreeSurfer, FSL, and ANTs bash environment."""
+        fs_home = "/gpfs01/software/imaging/freesurfer/8.2.0-1"
+        fsl_home = "/software/imaging/fsl/6.0.6.3"
+        ants_path = "/gpfs01/software/imaging/ANTs/ants-2.6.2/bin"
+        
+        bash_script = (
+            f"export FREESURFER_HOME={fs_home} && "
+            f"source {fs_home}/SetUpFreeSurfer.sh >/dev/null 2>&1 || true && "
+            f"export FSLDIR={fsl_home} && "
+            f"source {fsl_home}/etc/fslconf/fsl.sh >/dev/null 2>&1 || true && "
+            f"export ANTSPATH={ants_path}/ && "
+            f"export PATH={ants_path}:$PATH && "
+            "\"$@\""
+        )
+        return ["bash", "-c", bash_script, "--"] + cmd
+
     def _prepare_environment(
         self, tmp_dir: Path, threads: int
     ) -> Dict[str, str]:
@@ -396,6 +413,7 @@ class MRIQCRunner:
         env = self._prepare_environment(tmp_dir, threads)
 
         self._logger.info("Executing MRIQC participant: %s", " ".join(cmd))
+        cmd = self._wrap_with_neuroimaging_env(cmd)
         result = subprocess.run(cmd, env=env, check=False)
         if result.returncode != 0:
             self._logger.error(
@@ -456,6 +474,7 @@ class MRIQCRunner:
         env = self._prepare_environment(tmp_dir, threads)
 
         self._logger.info("Executing MRIQC group: %s", " ".join(cmd))
+        cmd = self._wrap_with_neuroimaging_env(cmd)
         result = subprocess.run(cmd, env=env, check=False)
         if result.returncode != 0:
             self._logger.error(
