@@ -291,16 +291,16 @@ class MRIQCRunner:
         fs_home = "/gpfs01/software/imaging/freesurfer/8.2.0-1"
         fsl_home = "/software/imaging/fsl/6.0.6.3"
         ants_path = "/gpfs01/software/imaging/ANTs/ants-2.6.2/bin"
-        afni_path = "/gpfs01/software/afni-24.1.06/binary/bin"
         
         bash_script = (
+            "source /usr/share/Modules/init/bash >/dev/null 2>&1 || true && "
+            "module load afni-uon/binary/24.1.06 >/dev/null 2>&1 || true && "
             f"export FREESURFER_HOME={fs_home} && "
             f"source {fs_home}/SetUpFreeSurfer.sh >/dev/null 2>&1 || true && "
             f"export FSLDIR={fsl_home} && "
             f"source {fsl_home}/etc/fslconf/fsl.sh >/dev/null 2>&1 || true && "
             f"export ANTSPATH={ants_path}/ && "
-            f"export AFNIDIR={afni_path} && "
-            f"export PATH={ants_path}:{afni_path}:$PATH && "
+            f"export PATH={ants_path}:$PATH && "
             "\"$@\""
         )
         return ["bash", "-c", bash_script, "--"] + cmd
