@@ -421,6 +421,13 @@ class FastSurferRunner:
         else:
             env["APPTAINER_BIND"] = bind_paths
             
+        # Force Singularity to mount NVIDIA drivers
+        env["SINGULARITY_NV"] = "1"
+        env["APPTAINER_NV"] = "1"
+        
+        # Force PyTorch to use exactly one GPU
+        env["CUDA_VISIBLE_DEVICES"] = "0"
+            
         if fs_license and fs_license.strip():
             env["FS_LICENSE"] = str(fs_license).strip()
         return env
