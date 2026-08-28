@@ -74,7 +74,7 @@ def get_raw_data_dir() -> str:
 
 def get_output_dir() -> str:
     """Return the global output directory prefix from configuration."""
-    return str(config.get("output_dir", "."))
+    return str(Path(config.get("output_dir", ".")).resolve())
 
 
 def get_scripts_dir() -> str:
@@ -89,12 +89,12 @@ def get_bids_dir() -> str:
 
 def get_derivatives_dir() -> str:
     """Return the root derivatives directory from configuration."""
-    return str(Path(get_output_dir()) / config.get("derivatives_dir", "derivatives"))
+    return str(Path(get_output_dir()).resolve() / config.get("derivatives_dir", "derivatives"))
 
 
 def get_mriqc_dir() -> str:
-    """Return the MRIQC output directory path."""
-    return str(Path(get_derivatives_dir()) / "mriqc")
+    """Return the MRIQC derivatives output directory path."""
+    return str(Path(get_derivatives_dir()).resolve() / "mriqc")
 
 
 def get_work_dir() -> str:
