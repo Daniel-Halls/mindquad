@@ -1,3 +1,4 @@
+import sys
 """Snakemake rules for QSIPrep diffusion MRI preprocessing."""
 
 from pathlib import Path
@@ -15,6 +16,7 @@ rule qsiprep_participant:
         marker=get_qsiprep_dir() + "/sub-{subject}/.qsiprep_complete",
         report=get_qsiprep_dir() + "/sub-{subject}.html",
     params:
+        python_bin=sys.executable,
         scripts_dir=get_scripts_dir(),
         bids_dir=get_bids_dir(),
         out_dir=get_qsiprep_dir(),
@@ -33,7 +35,7 @@ rule qsiprep_participant:
     threads: get_qsiprep_threads()
     shell:
         """
-        python "{params.scripts_dir}"/qsiprep_helper.py \
+        {params.python_bin} "{params.scripts_dir}"/qsiprep_helper.py \
             --bids-dir "{params.bids_dir}" \
             --output-dir "{params.out_dir}" \
             --subject "{params.subject}" \

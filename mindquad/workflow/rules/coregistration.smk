@@ -1,3 +1,4 @@
+import sys
 """Snakemake rules for T2w to T1w diffeomorphic coregistration."""
 
 from pathlib import Path
@@ -18,6 +19,7 @@ rule coregister_t2_to_t1:
         ),
         report=get_coregistration_dir() + "/sub-{subject}.html",
     params:
+        python_bin=sys.executable,
         scripts_dir=get_scripts_dir(),
         t1w=get_t1w_image,
         t2w=get_t2w_image,
@@ -34,7 +36,7 @@ rule coregister_t2_to_t1:
     threads: get_coregistration_threads()
     shell:
         """
-        python "{params.scripts_dir}"/coregistration_helper.py \
+        {params.python_bin} "{params.scripts_dir}"/coregistration_helper.py \
             --t1 "{params.t1w}" \
             --t2 "{params.t2w}" \
             --output-dir "{params.out_dir}" \

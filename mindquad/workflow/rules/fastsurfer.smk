@@ -1,3 +1,4 @@
+import sys
 """Snakemake rules for FastSurfer structural whole-brain segmentation and surface reconstruction."""
 
 from pathlib import Path
@@ -12,6 +13,7 @@ rule fastsurfer_subject:
         marker=get_fastsurfer_dir() + "/sub-{subject}/.fastsurfer_complete",
         seg=get_fastsurfer_dir() + "/sub-{subject}/mri/aparc.DKTatlas+aseg.deep.mgz",
     params:
+        python_bin=sys.executable,
         scripts_dir=get_scripts_dir(),
         t1w=get_t1w_image,
         sd=get_fastsurfer_dir(),
@@ -25,7 +27,7 @@ rule fastsurfer_subject:
         """
         module load extension/imaging fastsurfer-img 2>/dev/null || true
         module load cuda-img 2>/dev/null || true
-        python "{params.scripts_dir}"/fastsurfer_helper.py \
+        {params.python_bin} "{params.scripts_dir}"/fastsurfer_helper.py \
             --t1 "{params.t1w}" \
             --sd "{params.sd}" \
             --sid "{params.sid}" \

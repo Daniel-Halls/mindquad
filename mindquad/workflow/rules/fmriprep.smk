@@ -1,3 +1,4 @@
+import sys
 """Snakemake rules for fMRIPrep functional and anatomical preprocessing."""
 
 from pathlib import Path
@@ -15,6 +16,7 @@ rule fmriprep_participant:
         marker=get_fmriprep_dir() + "/sub-{subject}/.fmriprep_complete",
         report=get_fmriprep_dir() + "/sub-{subject}.html",
     params:
+        python_bin=sys.executable,
         scripts_dir=get_scripts_dir(),
         bids_dir=get_bids_dir(),
         out_dir=get_fmriprep_dir(),
@@ -33,7 +35,7 @@ rule fmriprep_participant:
     shell:
         """
         module load extension/imaging fmriprep-img 2>/dev/null || true
-        python "{params.scripts_dir}"/fmriprep_helper.py \
+        {params.python_bin} "{params.scripts_dir}"/fmriprep_helper.py \
             --bids-dir "{params.bids_dir}" \
             --output-dir "{params.out_dir}" \
             --subject "{params.subject}" \

@@ -1,3 +1,4 @@
+import sys
 """Snakemake rules for MRIQC participant and group level quality control."""
 
 from pathlib import Path
@@ -12,6 +13,7 @@ rule mriqc_participant:
         marker=get_mriqc_dir() + "/sub-{subject}/.mriqc_complete",
         report=get_mriqc_dir() + "/sub-{subject}.html",
     params:
+        python_bin=sys.executable,
         scripts_dir=get_scripts_dir(),
         bids_dir=get_bids_dir(),
         out_dir=get_mriqc_dir(),
@@ -25,7 +27,7 @@ rule mriqc_participant:
     threads: get_mriqc_threads()
     shell:
         """
-        python "{params.scripts_dir}"/mriqc_helper.py participant \
+        {params.python_bin} "{params.scripts_dir}"/mriqc_helper.py participant \
             --bids-dir "{params.bids_dir}" \
             --output-dir "{params.out_dir}" \
             --subject "{params.subject}" \
@@ -49,6 +51,7 @@ rule mriqc_group:
     output:
         group_marker=get_mriqc_dir() + "/.mriqc_group_complete",
     params:
+        python_bin=sys.executable,
         scripts_dir=get_scripts_dir(),
         bids_dir=get_bids_dir(),
         out_dir=get_mriqc_dir(),
@@ -59,7 +62,7 @@ rule mriqc_group:
     threads: get_mriqc_threads()
     shell:
         """
-        python "{params.scripts_dir}"/mriqc_helper.py group \
+        {params.python_bin} "{params.scripts_dir}"/mriqc_helper.py group \
             --bids-dir "{params.bids_dir}" \
             --output-dir "{params.out_dir}" \
             --work-dir "{params.work_dir}" \

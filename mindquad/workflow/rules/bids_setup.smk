@@ -1,3 +1,4 @@
+import sys
 """Snakemake rules for BIDS dataset initialization and DICOM to BIDS conversion."""
 
 
@@ -8,6 +9,7 @@ rule bids_init_dataset:
         readme=get_bids_dir() + "/README",
         bidsignore=get_bids_dir() + "/.bidsignore",
     params:
+        python_bin=sys.executable,
         scripts_dir=get_scripts_dir(),
         bids_dir=get_bids_dir(),
         name=config.get("dataset_description", {}).get(
@@ -19,7 +21,7 @@ rule bids_init_dataset:
         license=config.get("dataset_description", {}).get("License", "CC0"),
     shell:
         """
-        python "{params.scripts_dir}"/bids_init.py \
+        {params.python_bin} "{params.scripts_dir}"/bids_init.py \
             --bids-dir "{params.bids_dir}" \
             --name "{params.name}" \
             --bids-version "{params.bids_version}" \
@@ -34,6 +36,7 @@ rule dcm2niix_convert_subject:
     output:
         converted_marker=get_work_dir() + "/sub-{subject}/dcm2niix/.converted",
     params:
+        python_bin=sys.executable,
         out_dir=get_work_dir() + "/sub-{subject}/dcm2niix",
         tmp_dir=get_tmp_dir(),
         args=config.get("dcm2niix", {}).get("args", "-z y -b y -ba y -f %p_%s"),
@@ -55,6 +58,7 @@ checkpoint organize_bids_subject:
     output:
         bids_marker=get_bids_dir() + "/sub-{subject}/.bids_organized",
     params:
+        python_bin=sys.executable,
         scripts_dir=get_scripts_dir(),
         input_dir=get_work_dir() + "/sub-{subject}/dcm2niix",
         bids_dir=get_bids_dir(),
@@ -62,7 +66,7 @@ checkpoint organize_bids_subject:
     threads: get_bids_threads()
     shell:
         """
-        python "{params.scripts_dir}"/bids_organizer.py \
+        {params.python_bin} "{params.scripts_dir}"/bids_organizer.py \
             --input-dir "{params.input_dir}" \
             --bids-dir "{params.bids_dir}" \
             --subject "{params.subject}" \

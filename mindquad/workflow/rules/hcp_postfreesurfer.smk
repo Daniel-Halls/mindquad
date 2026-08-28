@@ -1,3 +1,4 @@
+import sys
 """Snakemake rules for Human Connectome Project (HCP) PostFreeSurfer pipeline."""
 
 from pathlib import Path
@@ -23,6 +24,7 @@ rule hcp_postfreesurfer:
             "sub-{subject}.32k_fs_LR.wb.spec"
         ),
     params:
+        python_bin=sys.executable,
         scripts_dir=get_scripts_dir(),
         t1w=get_t1w_image,
         coreg_t2w=get_coregistered_t2w_image,
@@ -48,7 +50,7 @@ rule hcp_postfreesurfer:
     shell:
         """
         module load extension/imaging hcp-pipelines-img 2>/dev/null || true
-        python "{params.scripts_dir}"/hcp_helper.py \
+        {params.python_bin} "{params.scripts_dir}"/hcp_helper.py \
             --study-folder "{params.study_folder}" \
             --subject "{params.subject}" \
             --fs-dir "{params.fs_dir}" \
