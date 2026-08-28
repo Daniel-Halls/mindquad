@@ -286,21 +286,14 @@ class MRIQCRunner:
         """Initialize MRIQCRunner with logger."""
         self._logger = logging.getLogger(self.__class__.__name__)
 
-    def _wrap_with_neuroimaging_env(self, cmd: List[str]) -> List[str]:
-        """Wrap command with full FreeSurfer, FSL, ANTs, and AFNI bash environment."""
-        fs_home = "/gpfs01/software/imaging/freesurfer/8.2.0-1"
-        fsl_home = "/software/imaging/fsl/6.0.6.3"
-        ants_path = "/gpfs01/software/imaging/ANTs/ants-2.6.2/bin"
+    def _wrap_with_singularity(self, cmd: List[str]) -> List[str]:
+        """Wrap command with Singularity execution."""
+        container_path = "/imgshare/tES-FUS/containers/mriqc_latest.sif"
         
         bash_script = (
             "source /usr/share/Modules/init/bash >/dev/null 2>&1 || true && "
-            "module load afni-uon/binary/24.1.06 >/dev/null 2>&1 || true && "
-            f"export FREESURFER_HOME={fs_home} && "
-            f"source {fs_home}/SetUpFreeSurfer.sh >/dev/null 2>&1 || true && "
-            f"export FSLDIR={fsl_home} && "
-            f"source {fsl_home}/etc/fslconf/fsl.sh >/dev/null 2>&1 || true && "
-            f"export ANTSPATH={ants_path}/ && "
-            f"export PATH={ants_path}:$PATH && "
+            "module load singularity/3.8.5 >/dev/null 2>&1 || true && "
+            f"singularity exec --cleanenv {container_path} "
             "\"$@\""
         )
         return ["bash", "-c", bash_script, "--"] + cmd
@@ -324,13 +317,17 @@ class MRIQCRunner:
         env["OPENBLAS_NUM_THREADS"] = str(threads)
         env["MKL_NUM_THREADS"] = str(threads)
         
-        # Inject FreeSurfer environment to satisfy MRIQC's SynthStrip dependency
-        fs_home = "/gpfs01/software/imaging/freesurfer/8.2.0-1"
-        env["FREESURFER_HOME"] = fs_home
-        if "PATH" in env:
-            env["PATH"] = f"{fs_home}/bin:{env['PATH']}"
+        # Ensure Singularity/Apptainer mounts host directories
+        bind_paths = "/imgshare,/gpfs01"
+        if "SINGULARITY_BIND" in env:
+            env["SINGULARITY_BIND"] += f",{bind_paths}"
         else:
-            env["PATH"] = f"{fs_home}/bin"
+            env["SINGULARITY_BIND"] = bind_paths
+            
+        if "APPTAINER_BIND" in env:
+            env["APPTAINER_BIND"] += f",{bind_paths}"
+        else:
+            env["APPTAINER_BIND"] = bind_paths
             
         return env
     def _ensure_report_file(
