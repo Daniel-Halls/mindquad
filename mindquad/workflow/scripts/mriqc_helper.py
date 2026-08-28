@@ -412,7 +412,7 @@ class MRIQCRunner:
         env = self._prepare_environment(tmp_dir, threads)
 
         self._logger.info("Executing MRIQC participant: %s", " ".join(cmd))
-        cmd = self._wrap_with_neuroimaging_env(cmd)
+        cmd = self._wrap_with_singularity(cmd)
         result = subprocess.run(cmd, env=env, check=False)
         if result.returncode != 0:
             self._logger.error(
@@ -473,7 +473,7 @@ class MRIQCRunner:
         env = self._prepare_environment(tmp_dir, threads)
 
         self._logger.info("Executing MRIQC group: %s", " ".join(cmd))
-        cmd = self._wrap_with_neuroimaging_env(cmd)
+        cmd = self._wrap_with_singularity(cmd)
         result = subprocess.run(cmd, env=env, check=False)
         if result.returncode != 0:
             self._logger.error(
