@@ -532,6 +532,7 @@ class HCPCommandBuilder:
         self,
         study_folder: Path,
         subject: str,
+        executable: str = "PostFreeSurferPipeline.sh",
     ) -> List[str]:
         """Build command argument list for PostFreeSurferPipeline.sh execution.
 
@@ -543,8 +544,8 @@ class HCPCommandBuilder:
             List of CLI command tokens.
         """
         clean_subject = subject.strip()
-        cmd: List[str] = [
-            "PostFreeSurferPipeline.sh",
+        import shlex
+        cmd: List[str] = shlex.split(executable) + [
             f"--study-folder={study_folder}",
             f"--subject={clean_subject}",
             f"--processing-mode={self._config.processing_mode.value}",
@@ -1013,6 +1014,7 @@ class HCPRunner:
         cmd = builder.build_command(
             study_folder=study_folder,
             subject=subject,
+            executable=executable,
         )
 
         # 1. Set up HCP directory layout and symlinks

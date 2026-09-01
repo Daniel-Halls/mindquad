@@ -316,6 +316,7 @@ class QSIPrepCommandBuilder:
         output_dir: Path,
         subject: str,
         work_dir: Path,
+        executable: str = "qsiprep",
     ) -> List[str]:
         """Build command token list for participant-level QSIPrep execution.
 
@@ -329,8 +330,8 @@ class QSIPrepCommandBuilder:
             List of CLI command tokens.
         """
         clean_subject = subject.replace("sub-", "").strip()
-        cmd: List[str] = [
-            "qsiprep",
+        import shlex
+        cmd: List[str] = shlex.split(executable) + [
             str(bids_dir),
             str(output_dir),
             "participant",

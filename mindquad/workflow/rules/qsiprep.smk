@@ -17,6 +17,8 @@ rule qsiprep_participant:
         report=get_qsiprep_dir() + "/sub-{subject}.html",
     params:
         python_bin=sys.executable,
+        env_cmd=get_tool_env_cmd("qsiprep"),
+        executable=get_tool_executable("qsiprep", "qsiprep"),
         scripts_dir=get_scripts_dir(),
         bids_dir=get_bids_dir(),
         out_dir=get_qsiprep_dir(),
@@ -50,5 +52,6 @@ rule qsiprep_participant:
             --threads {threads} \
             --marker "{output.marker}" \
             --report "{output.report}" \
-            --extra-args "{params.extra_args}"
+            --extra-args "{params.extra_args}" \
+            --executable "{params.executable}"
         """

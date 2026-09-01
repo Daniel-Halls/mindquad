@@ -367,9 +367,10 @@ class MRIQCRunner:
         tmp_dir: Path,
         threads: int = 2,
         modalities: Optional[List[str]] = None,
-        extra_args: str = "--verbose-reports --no-sub",
+        extra_args: str = \"--verbose-reports --no-sub\",
         marker_path: Optional[Path] = None,
         report_path: Optional[Path] = None,
+        executable: str = \"mriqc\",
     ) -> int:
         """Execute participant-level MRIQC pipeline.
 
@@ -431,8 +432,9 @@ class MRIQCRunner:
         tmp_dir: Path,
         threads: int = 2,
         modalities: Optional[List[str]] = None,
-        extra_args: str = "--verbose-reports --no-sub",
+        extra_args: str = \"--verbose-reports --no-sub\",
         marker_path: Optional[Path] = None,
+        executable: str = \"mriqc\",
     ) -> int:
         """Execute group-level MRIQC pipeline.
 
@@ -520,6 +522,7 @@ class MRIQCApp:
         )
         part_parser.add_argument("--marker", type=Path, default=None)
         part_parser.add_argument("--report", type=Path, default=None)
+        part_parser.add_argument("--executable", type=str, default="mriqc")
 
         # Group subcommand
         group_parser = subparsers.add_parser("group")
@@ -537,6 +540,7 @@ class MRIQCApp:
             default="--verbose-reports --no-sub",
         )
         group_parser.add_argument("--marker", type=Path, default=None)
+        group_parser.add_argument("--executable", type=str, default="mriqc")
 
         return parser
 
@@ -568,6 +572,7 @@ class MRIQCApp:
                 extra_args=parsed.extra_args,
                 marker_path=parsed.marker,
                 report_path=parsed.report,
+                executable=parsed.executable,
             )
         elif parsed.mode == "group":
             return self._runner.run_group(
@@ -579,6 +584,7 @@ class MRIQCApp:
                 modalities=parsed.modalities,
                 extra_args=parsed.extra_args,
                 marker_path=parsed.marker,
+                executable=parsed.executable,
             )
         return 1
 

@@ -17,6 +17,8 @@ rule fmriprep_participant:
         report=get_fmriprep_dir() + "/sub-{subject}.html",
     params:
         python_bin=sys.executable,
+        env_cmd=get_tool_env_cmd("fmriprep"),
+        executable=get_tool_executable("fmriprep", "fmriprep"),
         scripts_dir=get_scripts_dir(),
         bids_dir=get_bids_dir(),
         out_dir=get_fmriprep_dir(),
@@ -34,7 +36,7 @@ rule fmriprep_participant:
     threads: get_fmriprep_threads()
     shell:
         """
-        module load extension/imaging fmriprep-img 2>/dev/null || true
+        {params.env_cmd}
         {params.python_bin} "{params.scripts_dir}"/fmriprep_helper.py \
             --bids-dir "{params.bids_dir}" \
             --output-dir "{params.out_dir}" \
@@ -49,5 +51,6 @@ rule fmriprep_participant:
             --threads {threads} \
             --marker "{output.marker}" \
             --report "{output.report}" \
-            --extra-args "{params.extra_args}"
+            --extra-args "{params.extra_args}" \
+            --executable "{params.executable}"
         """

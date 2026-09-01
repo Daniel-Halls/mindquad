@@ -15,6 +15,7 @@ rule mrs_processing:
         quantities=get_mrs_dir() + "/sub-{subject}/quantities.csv",
     params:
         python_bin=sys.executable,
+        env_cmd=get_tool_env_cmd("mrs"),
         scripts_dir=get_scripts_dir(),
         svs=get_mrs_svs_image,
         t1w=get_t1w_image,
@@ -37,6 +38,7 @@ rule mrs_processing:
     threads: get_mrs_threads()
     shell:
         """
+        {params.env_cmd}
         {params.python_bin} "{params.scripts_dir}"/mrs_helper.py \
             --data "{params.svs}" \
             --t1 "{params.t1w}" \

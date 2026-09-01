@@ -25,6 +25,8 @@ rule hcp_postfreesurfer:
         ),
     params:
         python_bin=sys.executable,
+        env_cmd=get_tool_env_cmd("hcp"),
+        executable=get_tool_executable("hcp", "PostFreeSurferPipeline.sh"),
         scripts_dir=get_scripts_dir(),
         t1w=get_t1w_image,
         coreg_t2w=get_coregistered_t2w_image,
@@ -49,7 +51,7 @@ rule hcp_postfreesurfer:
     threads: get_hcp_threads()
     shell:
         """
-        module load extension/imaging hcp-pipelines-img 2>/dev/null || true
+        {params.env_cmd}
         {params.python_bin} "{params.scripts_dir}"/hcp_helper.py \
             --study-folder "{params.study_folder}" \
             --subject "{params.subject}" \
@@ -71,5 +73,6 @@ rule hcp_postfreesurfer:
             --tmp-dir "{params.tmp_dir}" \
             --marker "{output.marker}" \
             --spec "{output.spec}" \
-            --extra-args "{params.extra_args}"
+            --extra-args "{params.extra_args}" \
+            --executable "{params.executable}"
         """

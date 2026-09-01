@@ -239,6 +239,7 @@ class FMRIPrepCommandBuilder:
         output_dir: Path,
         subject: str,
         work_dir: Path,
+        executable: str = "fmriprep",
     ) -> List[str]:
         """Build command token list for participant-level fMRIPrep execution.
 
@@ -252,8 +253,8 @@ class FMRIPrepCommandBuilder:
             List of CLI command tokens.
         """
         clean_subject = subject.replace("sub-", "").strip()
-        cmd: List[str] = [
-            "fmriprep",
+        import shlex
+        cmd: List[str] = shlex.split(executable) + [
             str(bids_dir),
             str(output_dir),
             "participant",

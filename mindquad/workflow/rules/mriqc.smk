@@ -14,6 +14,8 @@ rule mriqc_participant:
         report=get_mriqc_dir() + "/sub-{subject}.html",
     params:
         python_bin=sys.executable,
+        env_cmd=get_tool_env_cmd("mriqc"),
+        executable=get_tool_executable("mriqc", "mriqc"),
         scripts_dir=get_scripts_dir(),
         bids_dir=get_bids_dir(),
         out_dir=get_mriqc_dir(),
@@ -37,7 +39,8 @@ rule mriqc_participant:
             --modalities {params.modalities} \
             --marker "{output.marker}" \
             --report "{output.report}" \
-            --extra-args "{params.extra_args}"
+            --extra-args "{params.extra_args}" \
+            --executable "{params.executable}"
         """
 
 
@@ -52,6 +55,8 @@ rule mriqc_group:
         group_marker=get_mriqc_dir() + "/.mriqc_group_complete",
     params:
         python_bin=sys.executable,
+        env_cmd=get_tool_env_cmd("mriqc"),
+        executable=get_tool_executable("mriqc", "mriqc"),
         scripts_dir=get_scripts_dir(),
         bids_dir=get_bids_dir(),
         out_dir=get_mriqc_dir(),
@@ -70,5 +75,6 @@ rule mriqc_group:
             --threads {threads} \
             --modalities {params.modalities} \
             --marker "{output.group_marker}" \
-            --extra-args "{params.extra_args}"
+            --extra-args "{params.extra_args}" \
+            --executable "{params.executable}"
         """

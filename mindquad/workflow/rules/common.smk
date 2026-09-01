@@ -621,3 +621,36 @@ def get_mrs_water_ref_image(wildcards: Any) -> str:
 
 
 
+
+def get_root_mounts(*paths: str) -> str:
+    """Detect and return unique root directories from a list of paths for Singularity bindings."""
+    roots = set()
+    for p in paths:
+        path = Path(p).resolve()
+        if len(path.parts) > 1:
+            roots.add(f"/{path.parts[1]}")
+    if not roots:
+        return ""
+    return ",".join(f"{r}:{r}" for r in roots)
+
+def get_tool_env_cmd(tool_name: str) -> str:
+    """Return environment preparation command (e.g., module load) for a tool."""
+    tool_cfg = config.get(tool_name, {})
+    load_val = tool_cfg.get("load") or tool_cfg.get("module")
+    
+    if load_val and not str(load_val).endswith(".sif"):
+        return f"module load {load_val} 2>/dev/null || true;"
+    return "true;"
+
+def get_tool_executable(tool_name: str, default_bin: str) -> str:
+    """Return the executable string, auto-wrapping in singularity if a .sif is provided."""
+    tool_cfg = config.get(tool_name, {})
+    load_val = tool_cfg.get("load") or tool_cfg.get("sif")
+    
+    if load_val and str(load_val).endswith(".sif"):
+        out_dir = Path(get_output_dir()).resolve()
+        bids_dir = Path(get_bids_dir()).resolve()
+        binds = get_root_mounts(str(out_dir), str(bids_dir))
+        bind_arg = f"-B {binds}" if binds else ""
+        return f"singularity run --cleanenv {bind_arg} {load_val}"
+    return default_bin

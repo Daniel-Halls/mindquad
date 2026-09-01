@@ -37,15 +37,17 @@ rule dcm2niix_convert_subject:
         converted_marker=get_work_dir() + "/sub-{subject}/dcm2niix/.converted",
     params:
         python_bin=sys.executable,
+        env_cmd=get_tool_env_cmd("dcm2niix"),
+        executable=get_tool_executable("dcm2niix", "dcm2niix"),
         out_dir=get_work_dir() + "/sub-{subject}/dcm2niix",
         tmp_dir=get_tmp_dir(),
         args=config.get("dcm2niix", {}).get("args", "-z y -b y -ba y -f %p_%s"),
     threads: get_bids_threads()
     shell:
         """
-        module load dcm2niix-img 2>/dev/null || module load dcm2niix 2>/dev/null || true
+        {params.env_cmd}
         mkdir -p "{params.tmp_dir}" "{params.out_dir}"
-        TMPDIR="{params.tmp_dir}" dcm2niix {params.args} -o "{params.out_dir}" "{input.raw_dir}"
+        TMPDIR="{params.tmp_dir}" {params.executable} {params.args} -o "{params.out_dir}" "{input.raw_dir}"
         touch "{output.converted_marker}"
         """
 

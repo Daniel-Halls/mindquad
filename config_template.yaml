@@ -41,24 +41,28 @@ threads: 4
 # ---------------------------------------------------------
 
 dcm2niix:
+  load: "" # Put where dcm2niix is
+  # e.g., load: "/path/to/dcm2niix.sif"
   args: "-z y -b y -ba y -f %p_%s"
-  module: "dcm2niix"
 
 mriqc:
+  load: "" # Put where mriqc is (can be a .sif)
   modalities: ["T1w", "bold", "dwi"]
   threads: 4
   mem_gb: 8
   args: "--verbose-reports --no-sub"
 
 fastsurfer:
-  module: "fastsurfer"
+  load: "extension/imaging fastsurfer-img 2>/dev/null || true; module load cuda-img"
+  # e.g., load: "/path/to/fastsurfer.sif"
   threads: 4
   device: "cpu"
   fs_license: "/path/to/freesurfer/license.txt"
   args: "--batch 1"
 
 fmriprep:
-  module: "fmriprep"
+  load: ""
+  # e.g., load: "/path/to/fmriprep.sif"
   threads: 4
   mem_mb: 8000
   output_spaces: ["MNI152NLin2009cAsym:res-2", "fsaverage5"]
@@ -68,7 +72,8 @@ fmriprep:
   args: "--skip-bids-validation --notrack"
 
 qsiprep:
-  module: "qsiprep"
+  load: ""
+  # e.g., load: "/path/to/qsiprep.sif"
   threads: 4
   mem_mb: 8000
   output_resolution: 1.5
@@ -88,7 +93,8 @@ coregistration:
   args: ""
 
 hcp:
-  module: "hcppipelines"
+  load: ""
+  # e.g., load: "/path/to/hcp.sif"
   threads: 4
   processing_mode: "HCPStyleData"
   reg_name: "MSMSulc"
@@ -104,6 +110,7 @@ hcp:
   args: ""
 
 mrs:
+  load: ""
   threads: 4
   basis: ""
   fit_algorithm: "Newton"

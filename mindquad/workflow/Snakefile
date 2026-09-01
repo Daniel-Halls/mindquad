@@ -21,7 +21,7 @@ include: "rules/mrs.smk"
 def get_dynamic_targets(wildcards):
     targets = [
         f"{get_bids_dir()}/dataset_description.json",
-        f"{get_mriqc_dir()}/.mriqc_group_complete",
+        # f"{get_mriqc_dir()}/.mriqc_group_complete",
     ]
     
     for subject in get_bids_subjects():
@@ -41,8 +41,8 @@ def get_dynamic_targets(wildcards):
         targets.append(f"{get_bids_dir()}/sub-{subject}/.bids_organized")
         
         # MRIQC is implicitly triggered for all available modalities
-        targets.append(f"{get_mriqc_dir()}/sub-{subject}/.mriqc_complete")
-        targets.append(f"{get_mriqc_dir()}/sub-{subject}.html")
+        # targets.append(f"{get_mriqc_dir()}/sub-{subject}/.mriqc_complete")
+        # targets.append(f"{get_mriqc_dir()}/sub-{subject}.html")
         
         if has_anat:
             targets.append(f"{get_fastsurfer_dir()}/sub-{subject}/.fastsurfer_complete")

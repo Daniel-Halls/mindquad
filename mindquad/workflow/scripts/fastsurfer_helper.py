@@ -220,6 +220,10 @@ class FastSurferCommandBuilder:
         elif self._config.surf_only:
             cmd.append("--surf_only")
 
+        # Always generate FreeSurfer-compatible parcellations for fMRIPrep
+        if "--fsaparc" not in cmd and not self._config.seg_only:
+            cmd.append("--fsaparc")
+
         if self._config.parallel:
             cmd.append("--parallel")
 
