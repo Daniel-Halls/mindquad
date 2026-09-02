@@ -464,7 +464,7 @@ class FMRIPrepRunner:
         env["MKL_NUM_THREADS"] = str(threads)
         
         # Ensure Singularity/Apptainer mounts host directories
-        bind_paths = f"/imgshare,/gpfs01,{tmp_dir}:/tmp,{tmp_dir}:/var/tmp"
+        bind_paths = f"{tmp_dir}:/tmp,{tmp_dir}:/var/tmp"
         if "SINGULARITY_BIND" in env:
             env["SINGULARITY_BIND"] += f",{bind_paths}"
         else:
@@ -604,6 +604,23 @@ class FMRIPrepRunner:
                         self._logger.warning("Failed to remove lock file %s: %s", lock_file, e)
 
         self._logger.info("Executing fMRIPrep command: %s", " ".join(cmd))
+        # Dynamically inject root mounts for wrapper-based singularity containers
+        def get_root_mount(path: str) -> str:
+            p = Path(path).resolve()
+            return f"/{p.parts[1]}" if len(p.parts) > 1 else ""
+            
+        roots = set()
+        for p in [bids_dir, output_dir, work_dir, fs_subjects_dir, fs_license]:
+            if p:
+                r = get_root_mount(str(p))
+                if r:
+                    roots.add(f"{r}:{r}")
+                    
+        if roots:
+            root_binds = ",".join(roots)
+            for k in ["SINGULARITY_BIND", "APPTAINER_BIND"]:
+                env[k] = f"{root_binds},{env[k]}" if k in env else root_binds
+
         result = subprocess.run(cmd, env=env, check=False)
 
         if result.returncode != 0:

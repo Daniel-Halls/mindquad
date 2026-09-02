@@ -127,6 +127,7 @@ class QSIPrepConfig:
         unringing_method: Any = QSIPrepUnringingMethod.MRDEGIBBS,
         separate_all_dwis: bool = False,
         fs_license: Optional[str] = None,
+        eddy_config: Optional[str] = None,
         do_reconall: bool = False,
         bids_filter_file: Optional[str] = None,
         extra_args: str = "--skip-bids-validation --notrack",
@@ -168,6 +169,7 @@ class QSIPrepConfig:
         )
         self._separate_all_dwis = separate_all_dwis
         self._fs_license = fs_license
+        self._eddy_config = eddy_config
         self._do_reconall = do_reconall
         self._bids_filter_file = bids_filter_file
         self._extra_args = extra_args
@@ -210,6 +212,11 @@ class QSIPrepConfig:
     def fs_license(self) -> Optional[str]:
         """Return FreeSurfer license file path."""
         return self._fs_license
+
+    @property
+    def eddy_config(self) -> Optional[str]:
+        """Return eddy_params.json file path."""
+        return self._eddy_config
 
     @property
     def do_reconall(self) -> bool:
@@ -358,6 +365,10 @@ class QSIPrepCommandBuilder:
 
         if self._config.separate_all_dwis:
             cmd.append("--separate-all-dwis")
+
+        eddy_cfg = self._config.eddy_config
+        if eddy_cfg and eddy_cfg.strip():
+            cmd.extend(["--eddy-config", str(Path(eddy_cfg.strip()))])
 
         filt = self._config.bids_filter_file
         if filt and filt.strip():
@@ -542,7 +553,7 @@ class QSIPrepRunner:
             env["FS_LICENSE"] = str(fs_license).strip()
             
         # Ensure Singularity/Apptainer mounts host directories
-        bind_paths = f"/imgshare,/gpfs01,{tmp_dir}:/tmp,{tmp_dir}:/var/tmp"
+        bind_paths = f"{tmp_dir}:/tmp,{tmp_dir}:/var/tmp"
         if "SINGULARITY_BIND" in env:
             env["SINGULARITY_BIND"] += f",{bind_paths}"
         else:
@@ -608,6 +619,7 @@ class QSIPrepRunner:
         unringing_method: Any = QSIPrepUnringingMethod.MRDEGIBBS,
         separate_all_dwis: bool = False,
         fs_license: Optional[str] = None,
+        eddy_config: Optional[str] = None,
         do_reconall: bool = False,
         bids_filter_file: Optional[str] = None,
         extra_args: str = "--skip-bids-validation --notrack",
@@ -647,6 +659,7 @@ class QSIPrepRunner:
             unringing_method=unringing_method,
             separate_all_dwis=separate_all_dwis,
             fs_license=fs_license,
+            eddy_config=eddy_config,
             do_reconall=do_reconall,
             bids_filter_file=bids_filter_file,
             extra_args=extra_args,
@@ -665,6 +678,23 @@ class QSIPrepRunner:
         env = self.prepare_environment(tmp_dir, threads, fs_license)
 
         self._logger.info("Executing QSIPrep command: %s", " ".join(cmd))
+        # Dynamically inject root mounts for wrapper-based singularity containers
+        def get_root_mount(path: str) -> str:
+            p = Path(path).resolve()
+            return f"/{p.parts[1]}" if len(p.parts) > 1 else ""
+            
+        roots = set()
+        for p in [bids_dir, output_dir, work_dir, fs_license, eddy_config]:
+            if p:
+                r = get_root_mount(str(p))
+                if r:
+                    roots.add(f"{r}:{r}")
+                    
+        if roots:
+            root_binds = ",".join(roots)
+            for k in ["SINGULARITY_BIND", "APPTAINER_BIND"]:
+                env[k] = f"{root_binds},{env[k]}" if k in env else root_binds
+
         result = subprocess.run(cmd, env=env, check=False)
 
         if result.returncode != 0:
@@ -767,8 +797,12 @@ class QSIPrepApp:
         parser.add_argument(
             "--fs-license",
             type=str,
-            default="",
-            help="Path to FreeSurfer license file",
+            help="Path to FreeSurfer license file.",
+        )
+        parser.add_argument(
+            "--eddy-config",
+            type=str,
+            help="Path to eddy_params.json file.",
         )
         parser.add_argument(
             "--do-reconall",
@@ -844,6 +878,7 @@ class QSIPrepApp:
             unringing_method=parsed.unringing_method,
             separate_all_dwis=parsed.separate_all_dwis,
             fs_license=fs_lic,
+            eddy_config=parsed.eddy_config,
             do_reconall=parsed.do_reconall,
             bids_filter_file=bids_filt,
             extra_args=parsed.extra_args,

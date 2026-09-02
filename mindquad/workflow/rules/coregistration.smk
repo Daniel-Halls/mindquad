@@ -20,6 +20,7 @@ rule coregister_t2_to_t1:
         report=get_coregistration_dir() + "/sub-{subject}.html",
     params:
         python_bin=sys.executable,
+        env_cmd=get_tool_env_cmd("coregistration"),
         scripts_dir=get_scripts_dir(),
         t1w=get_t1w_image,
         t2w=get_t2w_image,

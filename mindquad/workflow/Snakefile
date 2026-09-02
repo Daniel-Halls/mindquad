@@ -34,7 +34,12 @@ def get_dynamic_targets(wildcards):
         has_dwi = (bids_dir / "dwi").exists()
         has_mrs = (bids_dir / "mrs").exists()
         
-        has_t2w = has_anat and len(list((bids_dir / "anat").glob("*T2w*"))) > 0
+        has_t2w = False
+        has_flair = False
+        if has_anat:
+            anat_files = [f.name.lower() for f in (bids_dir / "anat").iterdir() if f.is_file()]
+            has_t2w = any("t2w" in f for f in anat_files)
+            has_flair = any("flair" in f for f in anat_files)
 
         # Only append the terminal leaf nodes for this subject
         
@@ -48,8 +53,8 @@ def get_dynamic_targets(wildcards):
             targets.append(f"{get_qsiprep_dir()}/sub-{subject}/.qsiprep_complete")
             targets.append(f"{get_qsiprep_dir()}/sub-{subject}.html")
             
-        # If they have T2w data, HCP is the leaf.
-        if has_t2w:
+        # If they have T2w or FLAIR data, HCP is the leaf.
+        if has_t2w or has_flair:
             targets.append(f"{get_hcp_dir()}/sub-{subject}/.hcp_complete")
             targets.append(f"{get_hcp_dir()}/sub-{subject}/MNINonLinear/fsaverage_LR32k/sub-{subject}.32k_fs_LR.wb.spec")
             
@@ -60,7 +65,7 @@ def get_dynamic_targets(wildcards):
             targets.append(f"{get_mrs_dir()}/sub-{subject}/quantities.csv")
 
         # If they ONLY have T1w and no other modalities, FastSurfer is the leaf.
-        if has_anat and not (has_func or has_dwi or has_t2w or has_mrs):
+        if has_anat and not (has_func or has_dwi or has_t2w or has_flair or has_mrs):
             targets.append(f"{get_fastsurfer_dir()}/sub-{subject}/.fastsurfer_complete")
             targets.append(f"{get_fastsurfer_dir()}/sub-{subject}/mri/aparc.DKTatlas+aseg.deep.mgz")
             

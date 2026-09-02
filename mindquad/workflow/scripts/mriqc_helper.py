@@ -153,6 +153,7 @@ class MRIQCCommandBuilder:
         output_dir: str,
         subject: str,
         work_dir: str,
+        executable: str = "mriqc",
     ) -> List[str]:
         """Build command argument list for participant-level MRIQC execution.
 
@@ -161,13 +162,14 @@ class MRIQCCommandBuilder:
             output_dir: Path to MRIQC derivatives output directory.
             subject: Subject identifier (without 'sub-' prefix).
             work_dir: Path to intermediate working directory for this subject.
+            executable: Base executable command.
 
         Returns:
             List of CLI command tokens.
         """
         clean_subject = subject.replace("sub-", "").strip()
-        cmd: List[str] = [
-            "mriqc",
+        import shlex
+        cmd: List[str] = shlex.split(executable) + [
             str(Path(bids_dir)),
             str(Path(output_dir)),
             "participant",
@@ -193,6 +195,7 @@ class MRIQCCommandBuilder:
         bids_dir: str,
         output_dir: str,
         work_dir: str,
+        executable: str = "mriqc",
     ) -> List[str]:
         """Build command argument list for group-level MRIQC execution.
 
@@ -200,12 +203,13 @@ class MRIQCCommandBuilder:
             bids_dir: Path to BIDS dataset directory.
             output_dir: Path to MRIQC derivatives output directory.
             work_dir: Path to intermediate working directory for group level.
+            executable: Base executable command.
 
         Returns:
             List of CLI command tokens.
         """
-        cmd: List[str] = [
-            "mriqc",
+        import shlex
+        cmd: List[str] = shlex.split(executable) + [
             str(Path(bids_dir)),
             str(Path(output_dir)),
             "group",
@@ -281,18 +285,6 @@ class MRIQCRunner:
         """Initialize MRIQCRunner with logger."""
         self._logger = logging.getLogger(self.__class__.__name__)
 
-    def _wrap_with_singularity(self, cmd: List[str]) -> List[str]:
-        """Wrap command with Singularity execution."""
-        container_path = "/imgshare/tES-FUS/containers/mriqc_latest.sif"
-        
-        bash_script = (
-            "source /usr/share/Modules/init/bash >/dev/null 2>&1 || true && "
-            "module load singularity/3.8.5 >/dev/null 2>&1 || true && "
-            f"singularity exec --cleanenv -B /imgshare,/gpfs01 {container_path} "
-            "\"$@\""
-        )
-        return ["bash", "-c", bash_script, "--"] + cmd
-
     def _prepare_environment(
         self, tmp_dir: Path, threads: int
     ) -> Dict[str, str]:
@@ -313,7 +305,7 @@ class MRIQCRunner:
         env["MKL_NUM_THREADS"] = str(threads)
         
         # Ensure Singularity/Apptainer mounts host directories
-        bind_paths = f"/imgshare,/gpfs01,{tmp_dir}:/tmp,{tmp_dir}:/var/tmp"
+        bind_paths = f"{tmp_dir}:/tmp,{tmp_dir}:/var/tmp"
         if "SINGULARITY_BIND" in env:
             env["SINGULARITY_BIND"] += f",{bind_paths}"
         else:
@@ -400,7 +392,7 @@ class MRIQCRunner:
         )
         builder = MRIQCCommandBuilder(config)
         cmd = builder.build_participant_command(
-            str(bids_dir), str(output_dir), subject, str(work_dir)
+            str(bids_dir), str(output_dir), subject, str(work_dir), executable
         )
 
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -408,7 +400,23 @@ class MRIQCRunner:
         env = self._prepare_environment(tmp_dir, threads)
 
         self._logger.info("Executing MRIQC participant: %s", " ".join(cmd))
-        cmd = self._wrap_with_singularity(cmd)
+        # Dynamically inject root mounts for wrapper-based singularity containers
+        def get_root_mount(path: str) -> str:
+            p = Path(path).resolve()
+            return f"/{p.parts[1]}" if len(p.parts) > 1 else ""
+            
+        roots = set()
+        for p in [bids_dir, output_dir, work_dir]:
+            if p:
+                r = get_root_mount(str(p))
+                if r:
+                    roots.add(f"{r}:{r}")
+                    
+        if roots:
+            root_binds = ",".join(roots)
+            for k in ["SINGULARITY_BIND", "APPTAINER_BIND"]:
+                env[k] = f"{root_binds},{env[k]}" if k in env else root_binds
+
         result = subprocess.run(cmd, env=env, check=False)
         if result.returncode != 0:
             self._logger.error(
@@ -462,7 +470,7 @@ class MRIQCRunner:
         )
         builder = MRIQCCommandBuilder(config)
         cmd = builder.build_group_command(
-            str(bids_dir), str(output_dir), str(work_dir)
+            str(bids_dir), str(output_dir), str(work_dir), executable
         )
 
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -470,7 +478,23 @@ class MRIQCRunner:
         env = self._prepare_environment(tmp_dir, threads)
 
         self._logger.info("Executing MRIQC group: %s", " ".join(cmd))
-        cmd = self._wrap_with_singularity(cmd)
+        # Dynamically inject root mounts for wrapper-based singularity containers
+        def get_root_mount(path: str) -> str:
+            p = Path(path).resolve()
+            return f"/{p.parts[1]}" if len(p.parts) > 1 else ""
+            
+        roots = set()
+        for p in [bids_dir, output_dir, work_dir]:
+            if p:
+                r = get_root_mount(str(p))
+                if r:
+                    roots.add(f"{r}:{r}")
+                    
+        if roots:
+            root_binds = ",".join(roots)
+            for k in ["SINGULARITY_BIND", "APPTAINER_BIND"]:
+                env[k] = f"{root_binds},{env[k]}" if k in env else root_binds
+
         result = subprocess.run(cmd, env=env, check=False)
         if result.returncode != 0:
             self._logger.error(

@@ -24,6 +24,7 @@ rule qsiprep_participant:
         out_dir=get_qsiprep_dir(),
         subject="{subject}",
         fs_license=get_qsiprep_fs_license(),
+        eddy_config=get_qsiprep_eddy_config(),
         output_resolution=get_qsiprep_output_resolution(),
         denoise_method=get_qsiprep_denoise_method(),
         unringing_method=get_qsiprep_unringing_method(),
@@ -42,6 +43,7 @@ rule qsiprep_participant:
             --output-dir "{params.out_dir}" \
             --subject "{params.subject}" \
             --fs-license "{params.fs_license}" \
+            --eddy-config "{params.eddy_config}" \
             --output-resolution {params.output_resolution} \
             --denoise-method "{params.denoise_method}" \
             --unringing-method "{params.unringing_method}" \
