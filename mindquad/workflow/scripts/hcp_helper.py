@@ -963,6 +963,7 @@ class HCPRunner:
         extra_args: str = "",
         marker_path: Optional[Path] = None,
         spec_path: Optional[Path] = None,
+        executable: str = "hcp_wrapper",
     ) -> int:
         """Execute HCP PostFreeSurfer pipeline for a single subject.
 
@@ -1176,6 +1177,12 @@ class HCPApp:
             help="Path to completion marker file to create",
         )
         parser.add_argument(
+            "--executable",
+            type=str,
+            default="hcp_wrapper",
+            help="Executable name or wrapper",
+        )
+        parser.add_argument(
             "--spec",
             type=Path,
             default=None,
@@ -1242,6 +1249,7 @@ class HCPApp:
             ref_myelin_maps=ref_myelin,
             extra_args=parsed.extra_args,
             marker_path=parsed.marker,
+            executable=parsed.executable,
             spec_path=parsed.spec,
         )
 

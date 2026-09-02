@@ -126,7 +126,6 @@ class QSIPrepConfig:
         denoise_method: Any = QSIPrepDenoiseMethod.DWIDENOISE,
         unringing_method: Any = QSIPrepUnringingMethod.MRDEGIBBS,
         separate_all_dwis: bool = False,
-        fs_subjects_dir: Optional[str] = "derivatives/fastsurfer",
         fs_license: Optional[str] = None,
         do_reconall: bool = False,
         bids_filter_file: Optional[str] = None,
@@ -145,7 +144,6 @@ class QSIPrepConfig:
             denoise_method: DWI denoising method enum or string.
             unringing_method: Gibbs unringing method enum or string.
             separate_all_dwis: Whether to process DWI scans separately.
-            fs_subjects_dir: Path to FreeSurfer/FastSurfer subjects directory.
             fs_license: Path to FreeSurfer license file.
             do_reconall: Whether to run FreeSurfer surface reconstruction.
             bids_filter_file: Path to custom BIDS filter JSON file.
@@ -169,7 +167,6 @@ class QSIPrepConfig:
             else QSIPrepUnringingMethod.from_value(unringing_method)
         )
         self._separate_all_dwis = separate_all_dwis
-        self._fs_subjects_dir = fs_subjects_dir
         self._fs_license = fs_license
         self._do_reconall = do_reconall
         self._bids_filter_file = bids_filter_file
@@ -210,13 +207,8 @@ class QSIPrepConfig:
         return self._separate_all_dwis
 
     @property
-    def fs_subjects_dir(self) -> Optional[str]:
-        """Return FreeSurfer / FastSurfer subjects directory path."""
-        return self._fs_subjects_dir
-
-    @property
     def fs_license(self) -> Optional[str]:
-        """Return FreeSurfer license path."""
+        """Return FreeSurfer license file path."""
         return self._fs_license
 
     @property
@@ -356,10 +348,6 @@ class QSIPrepCommandBuilder:
             cmd.extend(
                 ["--unringing-method", self._config.unringing_method.value]
             )
-
-        fs_sd = self._config.fs_subjects_dir
-        if fs_sd and fs_sd.strip():
-            cmd.extend(["--fs-subjects-dir", str(Path(fs_sd.strip()))])
 
         fs_lic = self._config.fs_license
         if fs_lic and fs_lic.strip():
@@ -528,18 +516,6 @@ class QSIPrepRunner:
         """Initialize QSIPrepRunner with logger."""
         self._logger = logging.getLogger(self.__class__.__name__)
 
-    def _wrap_with_singularity(self, cmd: List[str]) -> List[str]:
-        """Wrap command with Singularity execution."""
-        container_path = "/imgshare/tES-FUS/containers/qsiprep_latest.sif"
-        
-        bash_script = (
-            "source /usr/share/Modules/init/bash >/dev/null 2>&1 || true && "
-            "module load singularity/3.8.5 >/dev/null 2>&1 || true && "
-            f"singularity exec --cleanenv -B /imgshare,/gpfs01 {container_path} "
-            "\"$@\""
-        )
-        return ["bash", "-c", bash_script, "--"] + cmd
-
     def prepare_environment(
         self,
         tmp_dir: Path,
@@ -566,7 +542,7 @@ class QSIPrepRunner:
             env["FS_LICENSE"] = str(fs_license).strip()
             
         # Ensure Singularity/Apptainer mounts host directories
-        bind_paths = "/imgshare,/gpfs01"
+        bind_paths = f"/imgshare,/gpfs01,{tmp_dir}:/tmp,{tmp_dir}:/var/tmp"
         if "SINGULARITY_BIND" in env:
             env["SINGULARITY_BIND"] += f",{bind_paths}"
         else:
@@ -631,13 +607,13 @@ class QSIPrepRunner:
         denoise_method: Any = QSIPrepDenoiseMethod.DWIDENOISE,
         unringing_method: Any = QSIPrepUnringingMethod.MRDEGIBBS,
         separate_all_dwis: bool = False,
-        fs_subjects_dir: Optional[str] = "derivatives/fastsurfer",
         fs_license: Optional[str] = None,
         do_reconall: bool = False,
         bids_filter_file: Optional[str] = None,
         extra_args: str = "--skip-bids-validation --notrack",
         marker_path: Optional[Path] = None,
         report_path: Optional[Path] = None,
+        executable: str = "qsiprep",
     ) -> int:
         """Execute QSIPrep pipeline for a single participant.
 
@@ -651,9 +627,8 @@ class QSIPrepRunner:
             mem_mb: Memory allocation in MB.
             output_resolution: Isotropic voxel resolution in mm for output DWI.
             denoise_method: Denoising method enum or string.
-            unringing_method: Unringing method enum or string.
-            separate_all_dwis: Process DWI series separately if True.
-            fs_subjects_dir: FreeSurfer/FastSurfer subjects directory path.
+            unringing_method: Gibbs unringing method.
+            separate_all_dwis: Process each DWI independently.
             fs_license: FreeSurfer license file path.
             do_reconall: Run FreeSurfer surface reconstruction flag.
             bids_filter_file: BIDS query filter file path.
@@ -671,7 +646,6 @@ class QSIPrepRunner:
             denoise_method=denoise_method,
             unringing_method=unringing_method,
             separate_all_dwis=separate_all_dwis,
-            fs_subjects_dir=fs_subjects_dir,
             fs_license=fs_license,
             do_reconall=do_reconall,
             bids_filter_file=bids_filter_file,
@@ -683,10 +657,7 @@ class QSIPrepRunner:
         )
         builder = QSIPrepCommandBuilder(config)
         cmd = builder.build_participant_command(
-            bids_dir=bids_dir,
-            output_dir=output_dir,
-            subject=subject,
-            work_dir=work_dir,
+            bids_dir, output_dir, subject, work_dir, executable
         )
 
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -694,7 +665,6 @@ class QSIPrepRunner:
         env = self.prepare_environment(tmp_dir, threads, fs_license)
 
         self._logger.info("Executing QSIPrep command: %s", " ".join(cmd))
-        cmd = self._wrap_with_singularity(cmd)
         result = subprocess.run(cmd, env=env, check=False)
 
         if result.returncode != 0:
@@ -795,12 +765,6 @@ class QSIPrepApp:
             help="Process separate DWI runs individually",
         )
         parser.add_argument(
-            "--fs-subjects-dir",
-            type=str,
-            default="derivatives/fastsurfer",
-            help="Precomputed FreeSurfer/FastSurfer subjects directory",
-        )
-        parser.add_argument(
             "--fs-license",
             type=str,
             default="",
@@ -823,6 +787,12 @@ class QSIPrepApp:
             type=str,
             default="--skip-bids-validation --notrack",
             help="Additional CLI flags passed directly to QSIPrep",
+        )
+        parser.add_argument(
+            "--executable",
+            type=str,
+            default="qsiprep",
+            help="Executable name or wrapper",
         )
         parser.add_argument(
             "--marker",
@@ -854,9 +824,6 @@ class QSIPrepApp:
         parser = self.create_parser()
         parsed = parser.parse_args(args)
 
-        fs_sd = (
-            parsed.fs_subjects_dir if parsed.fs_subjects_dir else None
-        )
         fs_lic = (
             parsed.fs_license if parsed.fs_license else None
         )
@@ -876,13 +843,13 @@ class QSIPrepApp:
             denoise_method=parsed.denoise_method,
             unringing_method=parsed.unringing_method,
             separate_all_dwis=parsed.separate_all_dwis,
-            fs_subjects_dir=fs_sd,
             fs_license=fs_lic,
             do_reconall=parsed.do_reconall,
             bids_filter_file=bids_filt,
             extra_args=parsed.extra_args,
             marker_path=parsed.marker,
             report_path=parsed.report,
+            executable=parsed.executable,
         )
 
 

@@ -178,6 +178,7 @@ class FastSurferCommandBuilder:
         t1_path: Path,
         subjects_dir: Path,
         subject_id: str,
+        executable: str = "run_fastsurfer.sh",
     ) -> List[str]:
         """Build command argument list for FastSurfer execution.
 
@@ -189,13 +190,19 @@ class FastSurferCommandBuilder:
         Returns:
             List of CLI command tokens.
         """
-        import shutil
-        executable = shutil.which("run_fastsurfer.sh") or "run_fastsurfer.sh"
-        
         clean_sid = subject_id.strip()
-        cmd: List[str] = [
-            "bash",
-            executable,
+        
+        cmd: List[str] = []
+        if executable.startswith("singularity run"):
+            # Don't prefix with bash if it's a singularity wrapper command
+            import shlex
+            cmd.extend(shlex.split(executable))
+        else:
+            import shutil
+            resolved_exe = shutil.which(executable) or executable
+            cmd.extend(["bash", resolved_exe])
+            
+        cmd.extend([
             "--t1",
             str(t1_path),
             "--sd",
@@ -204,7 +211,7 @@ class FastSurferCommandBuilder:
             clean_sid,
             "--threads",
             str(self._config.threads),
-        ]
+        ])
 
         if self._config.device:
             cmd.extend(["--device", self._config.device.value])
@@ -414,7 +421,7 @@ class FastSurferRunner:
         env["MKL_NUM_THREADS"] = str(threads)
         
         # Ensure Singularity/Apptainer mounts host directories
-        bind_paths = "/imgshare,/gpfs01"
+        bind_paths = f"/imgshare,/gpfs01,{tmp_dir}:/tmp,{tmp_dir}:/var/tmp"
         if "SINGULARITY_BIND" in env:
             env["SINGULARITY_BIND"] += f",{bind_paths}"
         else:
@@ -447,6 +454,7 @@ class FastSurferRunner:
         fs_license: Optional[str] = None,
         extra_args: str = "",
         marker_path: Optional[Path] = None,
+        executable: str = "run_fastsurfer.sh",
     ) -> int:
         """Execute FastSurfer pipeline for a structural T1w volume.
 
@@ -471,7 +479,7 @@ class FastSurferRunner:
             extra_args=extra_args,
         )
         builder = FastSurferCommandBuilder(config)
-        cmd = builder.build_command(t1_path, subjects_dir, subject_id)
+        cmd = builder.build_command(t1_path, subjects_dir, subject_id, executable)
 
         subjects_dir.mkdir(parents=True, exist_ok=True)
         env = self.prepare_environment(tmp_dir, threads, fs_license)
@@ -558,6 +566,12 @@ class FastSurferApp:
             help="Path to completion marker file to create",
         )
         parser.add_argument(
+            "--executable",
+            type=str,
+            default="run_fastsurfer.sh",
+            help="Executable or singularity wrapper for fastsurfer",
+        )
+        parser.add_argument(
             "--tmp-dir",
             type=Path,
             default=Path(".tmp"),
@@ -591,6 +605,7 @@ class FastSurferApp:
             fs_license=parsed.fs_license if parsed.fs_license else None,
             extra_args=parsed.extra_args,
             marker_path=parsed.marker,
+            executable=parsed.executable,
         )
 
 

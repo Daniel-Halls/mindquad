@@ -21,7 +21,6 @@ include: "rules/mrs.smk"
 def get_dynamic_targets(wildcards):
     targets = [
         f"{get_bids_dir()}/dataset_description.json",
-        # f"{get_mriqc_dir()}/.mriqc_group_complete",
     ]
     
     for subject in get_bids_subjects():
@@ -37,37 +36,33 @@ def get_dynamic_targets(wildcards):
         
         has_t2w = has_anat and len(list((bids_dir / "anat").glob("*T2w*"))) > 0
 
-        # Always request BIDS marker for the subject
-        targets.append(f"{get_bids_dir()}/sub-{subject}/.bids_organized")
+        # Only append the terminal leaf nodes for this subject
         
-        # MRIQC is implicitly triggered for all available modalities
-        # targets.append(f"{get_mriqc_dir()}/sub-{subject}/.mriqc_complete")
-        # targets.append(f"{get_mriqc_dir()}/sub-{subject}.html")
-        
-        if has_anat:
-            targets.append(f"{get_fastsurfer_dir()}/sub-{subject}/.fastsurfer_complete")
-            targets.append(f"{get_fastsurfer_dir()}/sub-{subject}/mri/aparc.DKTatlas+aseg.deep.mgz")
-            
+        # If they have functional data, fMRIPrep is the leaf.
         if has_func and has_anat:
             targets.append(f"{get_fmriprep_dir()}/sub-{subject}/.fmriprep_complete")
             targets.append(f"{get_fmriprep_dir()}/sub-{subject}.html")
             
+        # If they have DWI data, QSIPrep is the leaf.
         if has_dwi and has_anat:
             targets.append(f"{get_qsiprep_dir()}/sub-{subject}/.qsiprep_complete")
             targets.append(f"{get_qsiprep_dir()}/sub-{subject}.html")
             
+        # If they have T2w data, HCP is the leaf.
         if has_t2w:
-            targets.append(f"{get_coregistration_dir()}/sub-{subject}/.coregistration_complete")
-            targets.append(f"{get_coregistration_dir()}/sub-{subject}/anat/sub-{subject}_space-T1w_desc-coreg_T2w.nii.gz")
-            targets.append(f"{get_coregistration_dir()}/sub-{subject}.html")
-            
             targets.append(f"{get_hcp_dir()}/sub-{subject}/.hcp_complete")
             targets.append(f"{get_hcp_dir()}/sub-{subject}/MNINonLinear/fsaverage_LR32k/sub-{subject}.32k_fs_LR.wb.spec")
-
+            
+        # If they have MRS data, MRS is the leaf.
         if has_mrs and has_anat:
             targets.append(f"{get_mrs_dir()}/sub-{subject}/.mrs_complete")
             targets.append(f"{get_mrs_dir()}/sub-{subject}.html")
             targets.append(f"{get_mrs_dir()}/sub-{subject}/quantities.csv")
+
+        # If they ONLY have T1w and no other modalities, FastSurfer is the leaf.
+        if has_anat and not (has_func or has_dwi or has_t2w or has_mrs):
+            targets.append(f"{get_fastsurfer_dir()}/sub-{subject}/.fastsurfer_complete")
+            targets.append(f"{get_fastsurfer_dir()}/sub-{subject}/mri/aparc.DKTatlas+aseg.deep.mgz")
             
     return targets
 

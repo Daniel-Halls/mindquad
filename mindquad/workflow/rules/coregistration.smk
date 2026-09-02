@@ -36,6 +36,7 @@ rule coregister_t2_to_t1:
     threads: get_coregistration_threads()
     shell:
         """
+        {params.env_cmd}
         {params.python_bin} "{params.scripts_dir}"/coregistration_helper.py \
             --t1 "{params.t1w}" \
             --t2 "{params.t2w}" \

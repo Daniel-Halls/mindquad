@@ -313,7 +313,7 @@ class MRIQCRunner:
         env["MKL_NUM_THREADS"] = str(threads)
         
         # Ensure Singularity/Apptainer mounts host directories
-        bind_paths = "/imgshare,/gpfs01"
+        bind_paths = f"/imgshare,/gpfs01,{tmp_dir}:/tmp,{tmp_dir}:/var/tmp"
         if "SINGULARITY_BIND" in env:
             env["SINGULARITY_BIND"] += f",{bind_paths}"
         else:
@@ -367,10 +367,10 @@ class MRIQCRunner:
         tmp_dir: Path,
         threads: int = 2,
         modalities: Optional[List[str]] = None,
-        extra_args: str = \"--verbose-reports --no-sub\",
+        extra_args: str = "--verbose-reports --no-sub",
         marker_path: Optional[Path] = None,
         report_path: Optional[Path] = None,
-        executable: str = \"mriqc\",
+        executable: str = "mriqc",
     ) -> int:
         """Execute participant-level MRIQC pipeline.
 
@@ -432,9 +432,9 @@ class MRIQCRunner:
         tmp_dir: Path,
         threads: int = 2,
         modalities: Optional[List[str]] = None,
-        extra_args: str = \"--verbose-reports --no-sub\",
+        extra_args: str = "--verbose-reports --no-sub",
         marker_path: Optional[Path] = None,
-        executable: str = \"mriqc\",
+        executable: str = "mriqc",
     ) -> int:
         """Execute group-level MRIQC pipeline.
 

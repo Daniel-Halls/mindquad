@@ -52,5 +52,6 @@ rule fmriprep_participant:
             --marker "{output.marker}" \
             --report "{output.report}" \
             --extra-args "{params.extra_args}" \
+            --fs-no-resume \
             --executable "{params.executable}"
         """

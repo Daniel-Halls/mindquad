@@ -29,6 +29,7 @@ rule mriqc_participant:
     threads: get_mriqc_threads()
     shell:
         """
+        {params.env_cmd}
         {params.python_bin} "{params.scripts_dir}"/mriqc_helper.py participant \
             --bids-dir "{params.bids_dir}" \
             --output-dir "{params.out_dir}" \
@@ -67,6 +68,7 @@ rule mriqc_group:
     threads: get_mriqc_threads()
     shell:
         """
+        {params.env_cmd}
         {params.python_bin} "{params.scripts_dir}"/mriqc_helper.py group \
             --bids-dir "{params.bids_dir}" \
             --output-dir "{params.out_dir}" \

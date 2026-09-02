@@ -31,6 +31,14 @@ subject_mapping:
   "subject_02": "02"
 
 # ---------------------------------------------------------
+# Container Engine Settings
+# ---------------------------------------------------------
+# Configure how container images (.sif files) are loaded and executed.
+container:
+  load: "singularity" # Optional: module to load the engine (e.g., 'singularity/3.8.5'). Leave empty if already in PATH.
+  command: "singularity"    # The base command or path to execute the container (e.g., 'singularity', 'apptainer', or '/opt/bin/singularity').
+
+# ---------------------------------------------------------
 # Global Resource Limits
 # ---------------------------------------------------------
 # (Optional) Global fallback for maximum CPU threads per rule. (Default: 2)
@@ -81,7 +89,6 @@ qsiprep:
   unringing_method: "mrdegibbs"
   separate_all_dwis: false
   fs_license: "/path/to/freesurfer/license.txt"
-  fs_subjects_dir: "derivatives/fastsurfer"
   args: "--skip-bids-validation --notrack"
 
 coregistration:

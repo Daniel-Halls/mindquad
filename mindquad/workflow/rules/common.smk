@@ -112,6 +112,8 @@ def get_mriqc_modalities() -> str:
     modalities = config.get("mriqc", {}).get(
         "modalities", ["T1w", "bold"]
     )
+    if isinstance(modalities, str):
+        return modalities
     return " ".join(modalities)
 
 
@@ -638,19 +640,28 @@ def get_tool_env_cmd(tool_name: str) -> str:
     tool_cfg = config.get(tool_name, {})
     load_val = tool_cfg.get("load") or tool_cfg.get("module")
     
-    if load_val and not str(load_val).endswith(".sif"):
-        return f"module load {load_val} 2>/dev/null || true;"
+    if load_val:
+        if str(load_val).endswith(".sif"):
+            # Load container engine module if configured
+            container_load = config.get("container", {}).get("load")
+            if container_load:
+                return f"module load {container_load} 2>/dev/null || true;"
+            return "true;"
+        else:
+            return f"module load {load_val} 2>/dev/null || true;"
     return "true;"
 
 def get_tool_executable(tool_name: str, default_bin: str) -> str:
-    """Return the executable string, auto-wrapping in singularity if a .sif is provided."""
+    """Return the executable string, auto-wrapping in container engine if a .sif is provided."""
     tool_cfg = config.get(tool_name, {})
     load_val = tool_cfg.get("load") or tool_cfg.get("sif")
     
     if load_val and str(load_val).endswith(".sif"):
+        engine_cmd = config.get("container", {}).get("command", "singularity")
         out_dir = Path(get_output_dir()).resolve()
         bids_dir = Path(get_bids_dir()).resolve()
         binds = get_root_mounts(str(out_dir), str(bids_dir))
         bind_arg = f"-B {binds}" if binds else ""
-        return f"singularity run --cleanenv {bind_arg} {load_val}"
+        nv_arg = " --nv" if tool_name == "qsiprep" else ""
+        return f"{engine_cmd} run --cleanenv{nv_arg} {bind_arg} {load_val}"
     return default_bin
