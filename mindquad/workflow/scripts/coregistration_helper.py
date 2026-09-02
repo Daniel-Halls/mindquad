@@ -340,7 +340,6 @@ class CoregistrationCommandBuilder:
         Returns:
             List of CLI command tokens.
         """
-        level_iters_str = " ".join(str(i) for i in self._config.level_iters)
         cmd: List[str] = [
             "dipy_align_syn",
             "--static",
@@ -350,14 +349,16 @@ class CoregistrationCommandBuilder:
             "--metric",
             self._config.metric.value,
             "--level_iters",
-            level_iters_str,
+        ]
+        cmd.extend(str(i) for i in self._config.level_iters)
+        cmd.extend([
             "--step_length",
             str(self._config.step_length),
             "--out_dir",
             str(out_dir),
             "--out_warped",
             out_warped_name,
-        ]
+        ])
 
         if out_field_name and out_field_name.strip():
             cmd.extend(["--out_field", out_field_name.strip()])
