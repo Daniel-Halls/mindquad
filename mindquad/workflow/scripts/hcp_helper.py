@@ -920,20 +920,32 @@ def resolve_hcp_pipedir(executable: Optional[str] = None) -> Optional[str]:
 
     Resolution strategy:
     1. os.environ['HCPPIPEDIR'] (set by environment or module load)
-    2. Derived from executable path if executable is a valid file
-    3. Derived from shutil.which('PostFreeSurferPipeline.sh')
+    2. os.environ['HCPPIPEDIR_PostFS'] (set by hcp-pipelines module)
+    3. Derived from executable path if executable has directory components
+    4. Derived from shutil.which('PostFreeSurferPipeline.sh')
     """
     env_dir = os.environ.get("HCPPIPEDIR")
     if env_dir and env_dir.strip():
         return env_dir.strip()
 
-    if executable and str(executable).strip():
+    postfs_dir = os.environ.get("HCPPIPEDIR_PostFS")
+    if postfs_dir and postfs_dir.strip():
         try:
-            exe_path = Path(executable)
-            if exe_path.name.endswith(".sh") or "/" in str(executable):
-                if exe_path.parent.name == "PostFreeSurfer":
-                    return str(exe_path.parent.parent)
-                return str(exe_path.parent)
+            p = Path(postfs_dir.strip())
+            if p.parent.name == "PostFreeSurfer":
+                return str(p.parent.parent)
+            if p.name == "PostFreeSurfer":
+                return str(p.parent)
+            return str(p.parent)
+        except Exception:
+            pass
+
+    if executable and "/" in str(executable):
+        try:
+            exe_path = Path(executable).resolve()
+            if exe_path.parent.name == "PostFreeSurfer":
+                return str(exe_path.parent.parent)
+            return str(exe_path.parent)
         except Exception:
             pass
 
@@ -1102,21 +1114,28 @@ class HCPRunner:
         import shutil
         if not Path(resolved_exe).is_file() and shutil.which(resolved_exe) is None:
             hcp_dir = resolve_hcp_pipedir(executable=resolved_exe)
+            candidates = []
             if hcp_dir:
-                candidates = [
+                candidates.extend([
                     Path(hcp_dir) / "PostFreeSurfer" / "PostFreeSurferPipeline.sh",
                     Path(hcp_dir) / "PostFreeSurferPipeline.sh",
                     Path(hcp_dir) / "PostFreeSurfer" / resolved_exe,
                     Path(hcp_dir) / resolved_exe,
-                ]
-                for cand in candidates:
-                    if cand.is_file():
-                        resolved_exe = str(cand)
-                        self._logger.info(
-                            "Resolved HCP executable from HCPPIPEDIR: %s",
-                            resolved_exe,
-                        )
-                        break
+                ])
+            postfs_env = os.environ.get("HCPPIPEDIR_PostFS")
+            if postfs_env:
+                candidates.extend([
+                    Path(postfs_env).parent / "PostFreeSurferPipeline.sh",
+                    Path(postfs_env) / "PostFreeSurferPipeline.sh",
+                ])
+            for cand in candidates:
+                if cand.is_file():
+                    resolved_exe = str(cand)
+                    self._logger.info(
+                        "Resolved HCP executable from HCPPIPEDIR: %s",
+                        resolved_exe,
+                    )
+                    break
 
         # Resolve templates and labels dynamically from HCPPIPEDIR if not explicitly provided
         hcp_pipedir = resolve_hcp_pipedir(executable=resolved_exe)
