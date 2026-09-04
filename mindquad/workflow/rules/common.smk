@@ -654,30 +654,31 @@ def get_root_mounts(*paths: str) -> str:
     return ",".join(f"{r}:{r}" for r in roots)
 
 def _extract_load_components(load_val: Any) -> Tuple[str, str]:
-    """Extract (module_string, sif_path) from a load configuration value."""
+    """Extract (module_string, file_path) from a load configuration value, supporting .sif and .sh."""
     if not load_val:
         return "", ""
         
     if isinstance(load_val, list):
         modules = []
-        sif_path = ""
+        file_path = ""
         for item in load_val:
-            if str(item).endswith(".sif"):
-                sif_path = str(item)
+            s_item = str(item).strip()
+            if s_item.endswith(".sif") or s_item.endswith(".sh"):
+                file_path = s_item
             else:
-                modules.append(str(item))
-        return " ".join(modules), sif_path
+                modules.append(s_item)
+        return " ".join(modules), file_path
         
     load_str = str(load_val)
-    if load_str.endswith(".sif") and " " not in load_str.strip():
+    if (load_str.endswith(".sif") or load_str.endswith(".sh")) and " " not in load_str.strip():
         return "", load_str.strip()
         
     import re
-    match = re.search(r'(\S+\.sif)', load_str)
+    match = re.search(r'(\S+\.(?:sif|sh))', load_str)
     if match:
-        sif_path = match.group(1)
-        module_str = load_str.replace(sif_path, "").strip()
-        return module_str, sif_path
+        file_path = match.group(1)
+        module_str = load_str.replace(file_path, "").strip()
+        return module_str, file_path
         
     return load_str, ""
 
@@ -690,7 +691,7 @@ def get_tool_env_cmd(tool_name: str) -> str:
     
     cmd_parts = []
     
-    if sif_path:
+    if sif_path and sif_path.endswith(".sif"):
         container_load = config.get("container", {}).get("load")
         if container_load:
             cmd_parts.append(f"module load {container_load} 2>/dev/null || true")
@@ -708,23 +709,31 @@ def get_tool_env_cmd(tool_name: str) -> str:
     return "; ".join(cmd_parts) + ";"
 
 def get_tool_executable(tool_name: str, default_bin: str) -> str:
-    """Return the executable string, auto-wrapping in container engine if a .sif is provided."""
+    """Return the executable string, auto-wrapping in container engine if a .sif is provided,
+    or returning custom script/executable if configured."""
     tool_cfg = config.get(tool_name, {})
+    custom_exe = tool_cfg.get("executable") or tool_cfg.get("script") or tool_cfg.get("bin")
+    if custom_exe:
+        return str(custom_exe)
+
     load_val = tool_cfg.get("load") or tool_cfg.get("sif")
+    _, target_path = _extract_load_components(load_val)
     
-    _, sif_path = _extract_load_components(load_val)
-    
-    if sif_path:
-        engine_cmd = config.get("container", {}).get("command", "singularity")
-        out_dir = Path(get_output_dir()).resolve()
-        bids_dir = Path(get_bids_dir()).resolve()
-        
-        mount_paths = [str(out_dir), str(bids_dir)]
-        if tool_name == "qsiprep":
-            mount_paths.append(get_qsiprep_eddy_config())
+    if target_path:
+        if target_path.endswith(".sif"):
+            engine_cmd = config.get("container", {}).get("command", "singularity")
+            out_dir = Path(get_output_dir()).resolve()
+            bids_dir = Path(get_bids_dir()).resolve()
             
-        binds = get_root_mounts(*mount_paths)
-        bind_arg = f"-B {binds}" if binds else ""
-        nv_arg = " --nv" if tool_name == "qsiprep" else ""
-        return f"{engine_cmd} run --cleanenv{nv_arg} {bind_arg} {sif_path}"
+            mount_paths = [str(out_dir), str(bids_dir)]
+            if tool_name == "qsiprep":
+                mount_paths.append(get_qsiprep_eddy_config())
+                
+            binds = get_root_mounts(*mount_paths)
+            bind_arg = f"-B {binds}" if binds else ""
+            nv_arg = " --nv" if tool_name == "qsiprep" else ""
+            return f"{engine_cmd} run --cleanenv{nv_arg} {bind_arg} {target_path}"
+        elif target_path.endswith(".sh") or Path(target_path).is_file():
+            return target_path
+            
     return default_bin

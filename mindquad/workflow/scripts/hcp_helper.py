@@ -318,6 +318,7 @@ class HCPSymlinkManager:
             Path to the verified subject directory.
         """
         t1w_dir = subject_dir / "T1w"
+        t2w_dir = subject_dir / "T2w"
         mni_dir = subject_dir / "MNINonLinear"
 
         subdirs = [
@@ -326,6 +327,11 @@ class HCPSymlinkManager:
             t1w_dir / "xfms",
             t1w_dir / "fsaverage_LR32k",
             t1w_dir / "fsaverage_LR164k",
+            t2w_dir,
+            t2w_dir / "Native",
+            t2w_dir / "xfms",
+            t2w_dir / "fsaverage_LR32k",
+            t2w_dir / "fsaverage_LR164k",
             mni_dir,
             mni_dir / "Native",
             mni_dir / "ROIs",
@@ -421,16 +427,28 @@ class HCPSymlinkManager:
         links: Dict[str, Path] = {}
 
         # T1w folder links
+        t1w_restore_1mm = t1w_dir / "T1w_acpc_dc_restore_1mm.nii.gz"
         t1w_restore = t1w_dir / "T1w_acpc_dc_restore.nii.gz"
+        t1w_dc = t1w_dir / "T1w_acpc_dc.nii.gz"
         t1w_standard = t1w_dir / "T1w.nii.gz"
+        links["t1w_restore_1mm"] = self.create_symlink(t1w_source, t1w_restore_1mm)
         links["t1w_restore"] = self.create_symlink(t1w_source, t1w_restore)
+        links["t1w_dc"] = self.create_symlink(t1w_source, t1w_dc)
         links["t1w_standard"] = self.create_symlink(t1w_source, t1w_standard)
 
+        t2w_dir = t1w_dir.parent / "T2w"
         if t2w_source.exists():
             t2w_restore = t1w_dir / "T2w_acpc_dc_restore.nii.gz"
             t2w_standard = t1w_dir / "T2w.nii.gz"
             links["t2w_restore"] = self.create_symlink(t2w_source, t2w_restore)
             links["t2w_standard"] = self.create_symlink(t2w_source, t2w_standard)
+
+            t2w_in_t2w = t2w_dir / "T2w.nii.gz"
+            t2w_restore_in_t2w = t2w_dir / "T2w_acpc_dc_restore.nii.gz"
+            t2w_dc_in_t2w = t2w_dir / "T2w_acpc_dc.nii.gz"
+            links["t2w_in_t2w"] = self.create_symlink(t2w_source, t2w_in_t2w)
+            links["t2w_restore_in_t2w"] = self.create_symlink(t2w_source, t2w_restore_in_t2w)
+            links["t2w_dc_in_t2w"] = self.create_symlink(t2w_source, t2w_dc_in_t2w)
 
         # MNI folder links
         mni_t1 = mni_t1w_source if mni_t1w_source and mni_t1w_source.exists() else t1w_source
@@ -444,26 +462,58 @@ class HCPSymlinkManager:
 
         return links
 
-    def setup_xfm_structure(self, t1w_dir: Path, mni_dir: Path) -> Path:
+    def setup_xfm_structure(
+        self,
+        t1w_dir: Path,
+        mni_dir: Path,
+        ref_image: Optional[Path] = None,
+    ) -> Path:
         """Create transformation directories and placeholder matrix files.
 
         Args:
             t1w_dir: Path to HCP T1w directory.
             mni_dir: Path to HCP MNINonLinear directory.
+            ref_image: Reference structural image for sizing identity warps.
 
         Returns:
             Path to T1w xfms directory.
         """
         t1w_xfms = t1w_dir / "xfms"
+        t2w_xfms = t1w_dir.parent / "T2w" / "xfms"
         mni_xfms = mni_dir / "xfms"
         t1w_xfms.mkdir(parents=True, exist_ok=True)
+        t2w_xfms.mkdir(parents=True, exist_ok=True)
         mni_xfms.mkdir(parents=True, exist_ok=True)
 
         # Create standard identity transformation matrix if not present
-        acpc_mat = t1w_xfms / "acpc.mat"
-        if not acpc_mat.exists():
-            ident_content = "1 0 0 0\n0 1 0 0\n0 0 1 0\n0 0 0 1\n"
-            acpc_mat.write_text(ident_content, encoding="utf-8")
+        ident_content = "1 0 0 0\n0 1 0 0\n0 0 1 0\n0 0 0 1\n"
+        for mat_file in [t1w_xfms / "acpc.mat", t2w_xfms / "acpc.mat"]:
+            if not mat_file.exists():
+                mat_file.write_text(ident_content, encoding="utf-8")
+
+        # Create identity warp fields for MNI nonlinear registration if needed
+        atlas_xfm = mni_xfms / "acpc_dc2standard.nii.gz"
+        inv_atlas_xfm = mni_xfms / "standard2acpc_dc.nii.gz"
+        jacobian = mni_xfms / "NonlinearRegJacobians.nii.gz"
+        if ref_image and ref_image.exists() and not atlas_xfm.exists():
+            try:
+                import nibabel as nib
+                import numpy as np
+                ref_nii = nib.load(str(ref_image))
+                shape_4d = ref_nii.shape[:3] + (3,)
+                zero_warp = np.zeros(shape_4d, dtype=np.float32)
+                hdr = ref_nii.header.copy()
+                hdr.set_data_dtype(np.float32)
+                warp_img = nib.Nifti1Image(zero_warp, ref_nii.affine, hdr)
+                warp_img.to_filename(str(atlas_xfm))
+                warp_img.to_filename(str(inv_atlas_xfm))
+
+                if not jacobian.exists():
+                    unit_jac = np.ones(ref_nii.shape[:3], dtype=np.float32)
+                    jac_img = nib.Nifti1Image(unit_jac, ref_nii.affine, hdr)
+                    jac_img.to_filename(str(jacobian))
+            except Exception as err:
+                self._logger.debug("Identity warp generation skipped: %s", err)
 
         return t1w_xfms
 
@@ -507,7 +557,7 @@ class HCPSymlinkManager:
             mni_t1w_source=mni_t1w_path,
             mni_t2w_source=mni_t2w_path,
         )
-        self.setup_xfm_structure(t1w_dir, mni_dir)
+        self.setup_xfm_structure(t1w_dir, mni_dir, ref_image=t1w_path)
         return subject_dir
 
 
@@ -553,7 +603,6 @@ class HCPCommandBuilder:
             f"--grayordinatesres={self._config.grayordinates_res}",
             f"--hiresmesh={self._config.hires_mesh}",
             f"--lowresmesh={self._config.low_res_mesh}",
-            f"--thickness-regression={self._config.thickness_regression.value}",
         ]
 
         if self._config.surf_atlas_dir and self._config.surf_atlas_dir.strip():
@@ -866,6 +915,42 @@ class HCPPathResolver:
         )
 
 
+def resolve_hcp_pipedir(executable: Optional[str] = None) -> Optional[str]:
+    """Dynamically resolve HCPPIPEDIR without machine-specific hardcoded paths.
+
+    Resolution strategy:
+    1. os.environ['HCPPIPEDIR'] (set by environment or module load)
+    2. Derived from executable path if executable is a valid file
+    3. Derived from shutil.which('PostFreeSurferPipeline.sh')
+    """
+    env_dir = os.environ.get("HCPPIPEDIR")
+    if env_dir and env_dir.strip():
+        return env_dir.strip()
+
+    if executable and str(executable).strip():
+        try:
+            exe_path = Path(executable)
+            if exe_path.name.endswith(".sh") or "/" in str(executable):
+                if exe_path.parent.name == "PostFreeSurfer":
+                    return str(exe_path.parent.parent)
+                return str(exe_path.parent)
+        except Exception:
+            pass
+
+    import shutil
+    which_exe = shutil.which("PostFreeSurferPipeline.sh")
+    if which_exe:
+        try:
+            exe_p = Path(which_exe).resolve()
+            if exe_p.parent.name == "PostFreeSurfer":
+                return str(exe_p.parent.parent)
+            return str(exe_p.parent)
+        except Exception:
+            pass
+
+    return None
+
+
 class HCPRunner:
     """Runner for HCP PostFreeSurfer execution, environment, and output handling."""
 
@@ -894,6 +979,26 @@ class HCPRunner:
         env["OMP_NUM_THREADS"] = str(threads)
         env["OPENBLAS_NUM_THREADS"] = str(threads)
         env["MKL_NUM_THREADS"] = str(threads)
+
+        hcp_pipedir = resolve_hcp_pipedir()
+        if hcp_pipedir:
+            env.setdefault("HCPPIPEDIR", hcp_pipedir)
+            env.setdefault("HCPPIPEDIR_Global", f"{hcp_pipedir}/global/scripts")
+            env.setdefault("HCPPIPEDIR_Templates", f"{hcp_pipedir}/global/templates")
+            env.setdefault("HCPPIPEDIR_Config", f"{hcp_pipedir}/global/config")
+            env.setdefault("MSMCONFIGDIR", f"{hcp_pipedir}/MSMConfig")
+
+        import shutil
+        if "CARET7DIR" not in env:
+            wb_bin = shutil.which("wb_command")
+            if wb_bin:
+                env["CARET7DIR"] = str(Path(wb_bin).parent)
+
+        if "MSMBINDIR" not in env:
+            msm_bin = shutil.which("msm")
+            if msm_bin:
+                env["MSMBINDIR"] = str(Path(msm_bin).parent)
+
         return env
 
     def ensure_spec_file(
@@ -993,6 +1098,47 @@ class HCPRunner:
         Returns:
             Process exit status code integer.
         """
+        resolved_exe = executable
+        import shutil
+        if not Path(resolved_exe).is_file() and shutil.which(resolved_exe) is None:
+            hcp_dir = resolve_hcp_pipedir(executable=resolved_exe)
+            if hcp_dir:
+                candidates = [
+                    Path(hcp_dir) / "PostFreeSurfer" / "PostFreeSurferPipeline.sh",
+                    Path(hcp_dir) / "PostFreeSurferPipeline.sh",
+                    Path(hcp_dir) / "PostFreeSurfer" / resolved_exe,
+                    Path(hcp_dir) / resolved_exe,
+                ]
+                for cand in candidates:
+                    if cand.is_file():
+                        resolved_exe = str(cand)
+                        self._logger.info(
+                            "Resolved HCP executable from HCPPIPEDIR: %s",
+                            resolved_exe,
+                        )
+                        break
+
+        # Resolve templates and labels dynamically from HCPPIPEDIR if not explicitly provided
+        hcp_pipedir = resolve_hcp_pipedir(executable=resolved_exe)
+
+        resolved_surf_atlas_dir = surf_atlas_dir
+        resolved_grayordinates_dir = grayordinates_dir
+        resolved_subcort_gray_labels = subcort_gray_labels
+        resolved_freesurfer_labels = freesurfer_labels
+        resolved_ref_myelin_maps = ref_myelin_maps
+
+        if hcp_pipedir:
+            if not resolved_surf_atlas_dir or not str(resolved_surf_atlas_dir).strip():
+                resolved_surf_atlas_dir = f"{hcp_pipedir}/global/templates/standard_mesh_atlases"
+            if not resolved_grayordinates_dir or not str(resolved_grayordinates_dir).strip():
+                resolved_grayordinates_dir = f"{hcp_pipedir}/global/templates/91282_Greyordinates"
+            if not resolved_subcort_gray_labels or not str(resolved_subcort_gray_labels).strip():
+                resolved_subcort_gray_labels = f"{hcp_pipedir}/global/config/FreeSurferSubcorticalLabelTableLut.txt"
+            if not resolved_freesurfer_labels or not str(resolved_freesurfer_labels).strip():
+                resolved_freesurfer_labels = f"{hcp_pipedir}/global/config/FreeSurferAllLut.txt"
+            if not resolved_ref_myelin_maps or not str(resolved_ref_myelin_maps).strip():
+                resolved_ref_myelin_maps = f"{hcp_pipedir}/global/templates/standard_mesh_atlases/Conte69.MyelinMap_BC.164k_fs_LR.dscalar.nii"
+
         config = HCPConfig(
             study_folder=str(study_folder),
             subject=subject,
@@ -1003,19 +1149,20 @@ class HCPRunner:
             hires_mesh=hires_mesh,
             low_res_mesh=low_res_mesh,
             thickness_regression=thickness_regression,
-            surf_atlas_dir=surf_atlas_dir,
-            grayordinates_dir=grayordinates_dir,
-            subcort_gray_labels=subcort_gray_labels,
-            freesurfer_labels=freesurfer_labels,
-            ref_myelin_maps=ref_myelin_maps,
+            surf_atlas_dir=resolved_surf_atlas_dir,
+            grayordinates_dir=resolved_grayordinates_dir,
+            subcort_gray_labels=resolved_subcort_gray_labels,
+            freesurfer_labels=resolved_freesurfer_labels,
+            ref_myelin_maps=resolved_ref_myelin_maps,
             extra_args=extra_args,
             tmp_dir=str(tmp_dir),
         )
+
         builder = HCPCommandBuilder(config)
         cmd = builder.build_command(
             study_folder=study_folder,
             subject=subject,
-            executable=executable,
+            executable=resolved_exe,
         )
 
         # 1. Set up HCP directory layout and symlinks
@@ -1028,6 +1175,25 @@ class HCPRunner:
         )
 
         env = self.prepare_environment(tmp_dir, threads)
+
+        # Calculate dynamic root mounts for container environments
+        mount_paths = [study_folder, t1_path, t2_path, fs_dir, tmp_dir]
+        roots = set()
+        for p in mount_paths:
+            try:
+                resolved = Path(p).resolve()
+                if len(resolved.parts) > 1:
+                    roots.add(f"/{resolved.parts[1]}")
+            except Exception:
+                pass
+        if roots:
+            bind_paths = ",".join(f"{r}:{r}" for r in sorted(roots))
+            for k in ["SINGULARITY_BIND", "APPTAINER_BIND"]:
+                if k in env and env[k].strip():
+                    env[k] = f"{env[k]},{bind_paths}"
+                else:
+                    env[k] = bind_paths
+
         self._logger.info("Executing HCP command: %s", " ".join(cmd))
         result = subprocess.run(cmd, env=env, check=False)
 

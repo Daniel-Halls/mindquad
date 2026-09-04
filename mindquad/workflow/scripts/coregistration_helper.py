@@ -342,9 +342,7 @@ class CoregistrationCommandBuilder:
         """
         cmd: List[str] = [
             "dipy_align_syn",
-            "--static",
             str(static_path),
-            "--moving",
             str(moving_path),
             "--metric",
             self._config.metric.value,

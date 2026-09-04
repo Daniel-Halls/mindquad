@@ -275,14 +275,14 @@ class TestCoregistrationCommandBuilder(unittest.TestCase):
         )
         expected_cmd = [
             "dipy_align_syn",
-            "--static",
             "bids/sub-01/anat/sub-01_T1w.nii.gz",
-            "--moving",
             "bids/sub-01/anat/sub-01_T2w.nii.gz",
             "--metric",
             "CC",
             "--level_iters",
-            "10 10 5",
+            "10",
+            "10",
+            "5",
             "--step_length",
             "0.25",
             "--out_dir",
