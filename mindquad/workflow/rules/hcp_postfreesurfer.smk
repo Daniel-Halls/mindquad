@@ -73,6 +73,6 @@ rule hcp_postfreesurfer:
             --tmp-dir "{params.tmp_dir}" \
             --marker "{output.marker}" \
             --spec "{output.spec}" \
-            --extra-args "{params.extra_args}" \
+            --extra-args="{params.extra_args}" \
             --executable "{params.executable}"
         """

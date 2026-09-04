@@ -709,7 +709,7 @@ def get_tool_env_cmd(tool_name: str) -> str:
     if not cmd_parts:
         return "true;"
         
-    return "; ".join(cmd_parts) + ";"
+    return "set +u; " + "; ".join(cmd_parts) + "; set -u;"
 
 def get_tool_executable(tool_name: str, default_bin: str) -> str:
     """Return the executable string, auto-wrapping in container engine if a .sif is provided,

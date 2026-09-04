@@ -467,6 +467,7 @@ class HCPSymlinkManager:
         t1w_dir: Path,
         mni_dir: Path,
         ref_image: Optional[Path] = None,
+        fs_dir: Optional[Path] = None,
     ) -> Path:
         """Create transformation directories and placeholder matrix files.
 
@@ -474,6 +475,7 @@ class HCPSymlinkManager:
             t1w_dir: Path to HCP T1w directory.
             mni_dir: Path to HCP MNINonLinear directory.
             ref_image: Reference structural image for sizing identity warps.
+            fs_dir: Optional path to FreeSurfer/FastSurfer directory.
 
         Returns:
             Path to T1w xfms directory.
@@ -491,29 +493,57 @@ class HCPSymlinkManager:
             if not mat_file.exists():
                 mat_file.write_text(ident_content, encoding="utf-8")
 
-        # Create identity warp fields for MNI nonlinear registration if needed
+        # Create identity warp fields and receive bias field
         atlas_xfm = mni_xfms / "acpc_dc2standard.nii.gz"
         inv_atlas_xfm = mni_xfms / "standard2acpc_dc.nii.gz"
         jacobian = mni_xfms / "NonlinearRegJacobians.nii.gz"
-        if ref_image and ref_image.exists() and not atlas_xfm.exists():
+        if ref_image and ref_image.exists():
             try:
                 import nibabel as nib
                 import numpy as np
+
                 ref_nii = nib.load(str(ref_image))
                 shape_4d = ref_nii.shape[:3] + (3,)
                 zero_warp = np.zeros(shape_4d, dtype=np.float32)
                 hdr = ref_nii.header.copy()
                 hdr.set_data_dtype(np.float32)
                 warp_img = nib.Nifti1Image(zero_warp, ref_nii.affine, hdr)
-                warp_img.to_filename(str(atlas_xfm))
-                warp_img.to_filename(str(inv_atlas_xfm))
+
+                for warp_file in [
+                    atlas_xfm,
+                    inv_atlas_xfm,
+                    t1w_xfms / "T1w_dc.nii.gz",
+                    t1w_xfms / "T2w_reg_dc.nii.gz",
+                    t2w_xfms / "T2w_reg_dc.nii.gz",
+                ]:
+                    if not warp_file.exists():
+                        warp_img.to_filename(str(warp_file))
 
                 if not jacobian.exists():
                     unit_jac = np.ones(ref_nii.shape[:3], dtype=np.float32)
                     jac_img = nib.Nifti1Image(unit_jac, ref_nii.affine, hdr)
                     jac_img.to_filename(str(jacobian))
+
+                # Receive bias field estimate: unit field of all 1s
+                bias_field = t1w_dir / "BiasField_acpc_dc.nii.gz"
+                if not bias_field.exists():
+                    unit_bias = np.ones(ref_nii.shape[:3], dtype=np.float32)
+                    bias_img = nib.Nifti1Image(unit_bias, ref_nii.affine, hdr)
+                    bias_img.to_filename(str(bias_field))
             except Exception as err:
-                self._logger.debug("Identity warp generation skipped: %s", err)
+                self._logger.debug("Identity warp / bias generation failed: %s", err)
+
+        # FreeSurfer T2w-to-T1w coregistration matrix
+        # In Mindquad, T2w is already coregistered to T1w, so this is identity
+        if fs_dir is not None:
+            fs_xfms = fs_dir / "mri" / "transforms"
+            t2w_to_t1w = fs_xfms / "T2wtoT1w.mat"
+            if not t2w_to_t1w.exists():
+                try:
+                    fs_xfms.mkdir(parents=True, exist_ok=True)
+                    t2w_to_t1w.write_text(ident_content, encoding="utf-8")
+                except OSError as err:
+                    self._logger.debug("Writing T2wtoT1w.mat failed: %s", err)
 
         return t1w_xfms
 
@@ -557,7 +587,21 @@ class HCPSymlinkManager:
             mni_t1w_source=mni_t1w_path,
             mni_t2w_source=mni_t2w_path,
         )
-        self.setup_xfm_structure(t1w_dir, mni_dir, ref_image=t1w_path)
+        self.setup_xfm_structure(
+            t1w_dir, mni_dir, ref_image=t1w_path, fs_dir=fs_dir
+        )
+
+        # Fallback verification for T2wtoT1w.mat in T1w/<subject>/mri/transforms
+        fs_sub_xfms = t1w_dir / clean_sub / "mri" / "transforms"
+        t2w_sub_mat = fs_sub_xfms / "T2wtoT1w.mat"
+        if not t2w_sub_mat.exists():
+            try:
+                fs_sub_xfms.mkdir(parents=True, exist_ok=True)
+                ident_content = "1 0 0 0\n0 1 0 0\n0 0 1 0\n0 0 0 1\n"
+                t2w_sub_mat.write_text(ident_content, encoding="utf-8")
+            except OSError as err:
+                self._logger.debug("Writing fallback T2wtoT1w.mat failed: %s", err)
+
         return subject_dir
 
 
@@ -975,12 +1019,14 @@ class HCPRunner:
         self,
         tmp_dir: Path,
         threads: int,
+        executable: Optional[str] = None,
     ) -> Dict[str, str]:
         """Prepare subprocess environment dictionary with thread constraints.
 
         Args:
             tmp_dir: Project-local temporary directory path.
             threads: Maximum thread count (must be <= 2).
+            executable: Optional executable path for dynamic HCPPIPEDIR detection.
 
         Returns:
             Updated environment dictionary.
@@ -992,21 +1038,31 @@ class HCPRunner:
         env["OPENBLAS_NUM_THREADS"] = str(threads)
         env["MKL_NUM_THREADS"] = str(threads)
 
-        hcp_pipedir = resolve_hcp_pipedir()
+        hcp_pipedir = resolve_hcp_pipedir(executable=executable)
         if hcp_pipedir:
-            env.setdefault("HCPPIPEDIR", hcp_pipedir)
+            env["HCPPIPEDIR"] = hcp_pipedir
             env.setdefault("HCPPIPEDIR_Global", f"{hcp_pipedir}/global/scripts")
             env.setdefault("HCPPIPEDIR_Templates", f"{hcp_pipedir}/global/templates")
             env.setdefault("HCPPIPEDIR_Config", f"{hcp_pipedir}/global/config")
             env.setdefault("MSMCONFIGDIR", f"{hcp_pipedir}/MSMConfig")
 
         import shutil
-        if "CARET7DIR" not in env:
+        if "FSLDIR" not in env or not env["FSLDIR"].strip():
+            flirt_bin = shutil.which("flirt")
+            if flirt_bin:
+                fsl_p = Path(flirt_bin).resolve()
+                if "share" in fsl_p.parts:
+                    idx = fsl_p.parts.index("share")
+                    env["FSLDIR"] = str(Path(*fsl_p.parts[:idx]))
+                else:
+                    env["FSLDIR"] = str(fsl_p.parent.parent)
+
+        if "CARET7DIR" not in env or not env["CARET7DIR"].strip():
             wb_bin = shutil.which("wb_command")
             if wb_bin:
                 env["CARET7DIR"] = str(Path(wb_bin).parent)
 
-        if "MSMBINDIR" not in env:
+        if "MSMBINDIR" not in env or not env["MSMBINDIR"].strip():
             msm_bin = shutil.which("msm")
             if msm_bin:
                 env["MSMBINDIR"] = str(Path(msm_bin).parent)
@@ -1193,7 +1249,7 @@ class HCPRunner:
             t2w_path=t2_path,
         )
 
-        env = self.prepare_environment(tmp_dir, threads)
+        env = self.prepare_environment(tmp_dir, threads, executable=resolved_exe)
 
         # Calculate dynamic root mounts for container environments
         mount_paths = [study_folder, t1_path, t2_path, fs_dir, tmp_dir]
