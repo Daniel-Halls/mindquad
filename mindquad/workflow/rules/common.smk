@@ -1,7 +1,7 @@
 """Common helper functions and configuration parsing for Mindquad pipeline."""
 
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 
 
 class StudyCohort:
@@ -18,8 +18,7 @@ class StudyCohort:
     @property
     def raw_data_dir(self) -> Path:
         """Return the raw data directory path."""
-        default_raw = "/imgshare/tES-FUS/pilot/dif_pilot"
-        return Path(str(self._config.get("raw_data_dir", default_raw)))
+        return Path(str(self._config.get("raw_data_dir")))
 
     @property
     def subjects(self) -> List[str]:
@@ -40,7 +39,7 @@ class StudyCohort:
             ]
             if found:
                 return sorted(found)
-        return ["19081_001"]
+        raise FileNotFoundError(f"No subjects found in {self.raw_data_dir}")
 
     def get_bids_subject_label(self, raw_subject: str) -> str:
         """Map raw subject directory name to sanitized BIDS subject label.
@@ -74,7 +73,7 @@ def get_raw_data_dir() -> str:
 
 def get_output_dir() -> str:
     """Return the global output directory prefix from configuration."""
-    return str(config.get("output_dir", "."))
+    return str(Path(config.get("output_dir", ".")).resolve())
 
 
 def get_scripts_dir() -> str:
@@ -89,12 +88,12 @@ def get_bids_dir() -> str:
 
 def get_derivatives_dir() -> str:
     """Return the root derivatives directory from configuration."""
-    return str(Path(get_output_dir()) / config.get("derivatives_dir", "derivatives"))
+    return str(Path(get_output_dir()).resolve() / config.get("derivatives_dir", "derivatives"))
 
 
 def get_mriqc_dir() -> str:
-    """Return the MRIQC output directory path."""
-    return str(Path(get_derivatives_dir()) / "mriqc")
+    """Return the MRIQC derivatives output directory path."""
+    return str(Path(get_derivatives_dir()).resolve() / "mriqc")
 
 
 def get_work_dir() -> str:
@@ -110,14 +109,26 @@ def get_tmp_dir() -> str:
 def get_mriqc_modalities() -> str:
     """Return space-separated list of MRIQC modalities from config."""
     modalities = config.get("mriqc", {}).get(
-        "modalities", ["T1w", "bold", "dwi"]
+        "modalities", ["T1w", "bold"]
     )
+    if isinstance(modalities, str):
+        return modalities
     return " ".join(modalities)
+
+
+def get_mriqc_threads() -> int:
+    """Return configured MRIQC thread count."""
+    return int(config.get("mriqc", {}).get("threads", 2))
+
+
+def get_bids_threads() -> int:
+    """Return configured BIDS setup thread count."""
+    return int(config.get("bids", {}).get("threads", 2))
 
 
 def get_mriqc_extra_args() -> str:
     """Return extra CLI flags for MRIQC from config."""
-    default_args = "--verbose-reports --no-sub"
+    default_args = "--verbose-reports --no-sub --notrack"
     return str(config.get("mriqc", {}).get("args", default_args))
 
 
@@ -226,27 +237,32 @@ def get_t1w_image(wildcards: Any) -> str:
 
 
 def get_t2w_image(wildcards: Any) -> str:
-    """Resolve T2w anatomical image path for a given subject wildcard.
+    """Resolve T2w (or FLAIR) anatomical image path for a given subject wildcard.
 
     Args:
         wildcards: Snakemake wildcards containing 'subject'.
 
     Returns:
-        Path to structural T2w NIfTI image.
+        Path to structural T2w or FLAIR NIfTI image.
     """
     subject_label = str(wildcards.subject).replace("sub-", "").strip()
     bids_root = Path(get_bids_dir())
     anat_dir = bids_root / f"sub-{subject_label}" / "anat"
     standard_t2 = anat_dir / f"sub-{subject_label}_T2w.nii.gz"
+    standard_flair = anat_dir / f"sub-{subject_label}_FLAIR.nii.gz"
 
     if standard_t2.exists():
         return str(standard_t2)
+    if standard_flair.exists():
+        return str(standard_flair)
 
     if anat_dir.exists():
-        for pattern in ["*T2w*.nii.gz", "*T2w*.nii"]:
-            matches = sorted(anat_dir.glob(pattern))
-            if matches:
-                return str(matches[0])
+        for f in sorted(anat_dir.iterdir()):
+            if "t2w" in f.name.lower() and f.name.endswith((".nii", ".nii.gz")):
+                return str(f)
+        for f in sorted(anat_dir.iterdir()):
+            if "flair" in f.name.lower() and f.name.endswith((".nii", ".nii.gz")):
+                return str(f)
 
     return str(standard_t2)
 
@@ -284,9 +300,10 @@ def get_fmriprep_cifti_output() -> str:
 
 def get_fmriprep_fs_subjects_dir() -> str:
     """Return FreeSurfer/FastSurfer subjects directory for fMRIPrep."""
-    return str(
-        config.get("fmriprep", {}).get("fs_subjects_dir", get_fastsurfer_dir())
-    )
+    fs_dir = config.get("fmriprep", {}).get("fs_subjects_dir", get_fastsurfer_dir())
+    if not __import__("pathlib").Path(fs_dir).is_absolute():
+        fs_dir = str(__import__("pathlib").Path(get_output_dir()) / fs_dir)
+    return str(__import__("pathlib").Path(fs_dir).resolve())
 
 
 def get_fmriprep_fs_license() -> str:
@@ -340,9 +357,10 @@ def get_qsiprep_separate_all_dwis() -> bool:
 
 def get_qsiprep_fs_subjects_dir() -> str:
     """Return FreeSurfer/FastSurfer subjects directory for QSIPrep."""
-    return str(
-        config.get("qsiprep", {}).get("fs_subjects_dir", get_fastsurfer_dir())
-    )
+    fs_dir = config.get("qsiprep", {}).get("fs_subjects_dir", get_fastsurfer_dir())
+    if not __import__("pathlib").Path(fs_dir).is_absolute():
+        fs_dir = str(__import__("pathlib").Path(get_output_dir()) / fs_dir)
+    return str(__import__("pathlib").Path(fs_dir).resolve())
 
 
 def get_qsiprep_fs_license() -> str:
@@ -350,6 +368,20 @@ def get_qsiprep_fs_license() -> str:
     return str(
         config.get("qsiprep", {}).get("fs_license", get_fastsurfer_license())
     )
+
+
+def get_qsiprep_eddy_config() -> str:
+    """Return path to QSIPrep eddy parameters JSON file."""
+    # First check if explicitly defined in config
+    configured = config.get("qsiprep", {}).get("eddy_config")
+    if configured:
+        return str(configured)
+    
+    # Otherwise try to locate it in the workflow config_files directory
+    default_path = Path(workflow.basedir) / "config_files" / "eddy_params.json"
+    if default_path.exists():
+        return str(default_path)
+    return ""
 
 
 def get_qsiprep_extra_args() -> str:
@@ -609,3 +641,99 @@ def get_mrs_water_ref_image(wildcards: Any) -> str:
 
 
 
+
+def get_root_mounts(*paths: str) -> str:
+    """Detect and return unique root directories from a list of paths for Singularity bindings."""
+    roots = set()
+    for p in paths:
+        path = Path(p).resolve()
+        if len(path.parts) > 1:
+            roots.add(f"/{path.parts[1]}")
+    if not roots:
+        return ""
+    return ",".join(f"{r}:{r}" for r in roots)
+
+def _extract_load_components(load_val: Any) -> Tuple[str, str]:
+    """Extract (module_string, file_path) from a load configuration value, supporting .sif and .sh."""
+    if not load_val:
+        return "", ""
+        
+    if isinstance(load_val, list):
+        modules = []
+        file_path = ""
+        for item in load_val:
+            s_item = str(item).strip()
+            if s_item.endswith(".sif") or s_item.endswith(".sh"):
+                file_path = s_item
+            else:
+                modules.append(s_item)
+        return " ".join(modules), file_path
+        
+    load_str = str(load_val)
+    if (load_str.endswith(".sif") or load_str.endswith(".sh")) and " " not in load_str.strip():
+        return "", load_str.strip()
+        
+    import re
+    match = re.search(r'(\S+\.(?:sif|sh))', load_str)
+    if match:
+        file_path = match.group(1)
+        module_str = load_str.replace(file_path, "").strip()
+        return module_str, file_path
+        
+    return load_str, ""
+
+def get_tool_env_cmd(tool_name: str) -> str:
+    """Return environment preparation command (e.g., module load) for a tool."""
+    tool_cfg = config.get(tool_name, {})
+    load_val = tool_cfg.get("load") or tool_cfg.get("module")
+    
+    module_str, sif_path = _extract_load_components(load_val)
+    
+    cmd_parts = []
+    
+    if sif_path and sif_path.endswith(".sif"):
+        container_load = config.get("container", {}).get("load")
+        if container_load:
+            cmd_parts.append(f"module load {container_load} 2>/dev/null || true")
+            
+    if module_str:
+        cleaned_str = module_str.strip()
+        if cleaned_str.startswith("module load ") or cleaned_str.startswith("source "):
+            cmd_parts.append(f"{cleaned_str} 2>/dev/null || true")
+        else:
+            cmd_parts.append(f"module load {cleaned_str} 2>/dev/null || true")
+        
+    if not cmd_parts:
+        return "true;"
+        
+    return "; ".join(cmd_parts) + ";"
+
+def get_tool_executable(tool_name: str, default_bin: str) -> str:
+    """Return the executable string, auto-wrapping in container engine if a .sif is provided,
+    or returning custom script/executable if configured."""
+    tool_cfg = config.get(tool_name, {})
+    custom_exe = tool_cfg.get("executable") or tool_cfg.get("script") or tool_cfg.get("bin")
+    if custom_exe:
+        return str(custom_exe)
+
+    load_val = tool_cfg.get("load") or tool_cfg.get("sif")
+    _, target_path = _extract_load_components(load_val)
+    
+    if target_path:
+        if target_path.endswith(".sif"):
+            engine_cmd = config.get("container", {}).get("command", "singularity")
+            out_dir = Path(get_output_dir()).resolve()
+            bids_dir = Path(get_bids_dir()).resolve()
+            
+            mount_paths = [str(out_dir), str(bids_dir)]
+            if tool_name == "qsiprep":
+                mount_paths.append(get_qsiprep_eddy_config())
+                
+            binds = get_root_mounts(*mount_paths)
+            bind_arg = f"-B {binds}" if binds else ""
+            nv_arg = " --nv" if tool_name == "qsiprep" else ""
+            return f"{engine_cmd} run --cleanenv{nv_arg} {bind_arg} {target_path}"
+        elif target_path.endswith(".sh") or Path(target_path).is_file():
+            return target_path
+            
+    return default_bin

@@ -126,8 +126,8 @@ class QSIPrepConfig:
         denoise_method: Any = QSIPrepDenoiseMethod.DWIDENOISE,
         unringing_method: Any = QSIPrepUnringingMethod.MRDEGIBBS,
         separate_all_dwis: bool = False,
-        fs_subjects_dir: Optional[str] = "derivatives/fastsurfer",
         fs_license: Optional[str] = None,
+        eddy_config: Optional[str] = None,
         do_reconall: bool = False,
         bids_filter_file: Optional[str] = None,
         extra_args: str = "--skip-bids-validation --notrack",
@@ -145,7 +145,6 @@ class QSIPrepConfig:
             denoise_method: DWI denoising method enum or string.
             unringing_method: Gibbs unringing method enum or string.
             separate_all_dwis: Whether to process DWI scans separately.
-            fs_subjects_dir: Path to FreeSurfer/FastSurfer subjects directory.
             fs_license: Path to FreeSurfer license file.
             do_reconall: Whether to run FreeSurfer surface reconstruction.
             bids_filter_file: Path to custom BIDS filter JSON file.
@@ -169,8 +168,8 @@ class QSIPrepConfig:
             else QSIPrepUnringingMethod.from_value(unringing_method)
         )
         self._separate_all_dwis = separate_all_dwis
-        self._fs_subjects_dir = fs_subjects_dir
         self._fs_license = fs_license
+        self._eddy_config = eddy_config
         self._do_reconall = do_reconall
         self._bids_filter_file = bids_filter_file
         self._extra_args = extra_args
@@ -210,14 +209,14 @@ class QSIPrepConfig:
         return self._separate_all_dwis
 
     @property
-    def fs_subjects_dir(self) -> Optional[str]:
-        """Return FreeSurfer / FastSurfer subjects directory path."""
-        return self._fs_subjects_dir
+    def fs_license(self) -> Optional[str]:
+        """Return FreeSurfer license file path."""
+        return self._fs_license
 
     @property
-    def fs_license(self) -> Optional[str]:
-        """Return FreeSurfer license path."""
-        return self._fs_license
+    def eddy_config(self) -> Optional[str]:
+        """Return eddy_params.json file path."""
+        return self._eddy_config
 
     @property
     def do_reconall(self) -> bool:
@@ -316,6 +315,7 @@ class QSIPrepCommandBuilder:
         output_dir: Path,
         subject: str,
         work_dir: Path,
+        executable: str = "qsiprep",
     ) -> List[str]:
         """Build command token list for participant-level QSIPrep execution.
 
@@ -329,8 +329,8 @@ class QSIPrepCommandBuilder:
             List of CLI command tokens.
         """
         clean_subject = subject.replace("sub-", "").strip()
-        cmd: List[str] = [
-            "qsiprep",
+        import shlex
+        cmd: List[str] = shlex.split(executable) + [
             str(bids_dir),
             str(output_dir),
             "participant",
@@ -356,10 +356,6 @@ class QSIPrepCommandBuilder:
                 ["--unringing-method", self._config.unringing_method.value]
             )
 
-        fs_sd = self._config.fs_subjects_dir
-        if fs_sd and fs_sd.strip():
-            cmd.extend(["--fs-subjects-dir", str(Path(fs_sd.strip()))])
-
         fs_lic = self._config.fs_license
         if fs_lic and fs_lic.strip():
             cmd.extend(["--fs-license-file", str(Path(fs_lic.strip()))])
@@ -369,6 +365,10 @@ class QSIPrepCommandBuilder:
 
         if self._config.separate_all_dwis:
             cmd.append("--separate-all-dwis")
+
+        eddy_cfg = self._config.eddy_config
+        if eddy_cfg and eddy_cfg.strip():
+            cmd.extend(["--eddy-config", str(Path(eddy_cfg.strip()))])
 
         filt = self._config.bids_filter_file
         if filt and filt.strip():
@@ -551,6 +551,19 @@ class QSIPrepRunner:
         env["MKL_NUM_THREADS"] = str(threads)
         if fs_license and fs_license.strip():
             env["FS_LICENSE"] = str(fs_license).strip()
+            
+        # Ensure Singularity/Apptainer mounts host directories
+        bind_paths = f"{tmp_dir}:/tmp,{tmp_dir}:/var/tmp"
+        if "SINGULARITY_BIND" in env:
+            env["SINGULARITY_BIND"] += f",{bind_paths}"
+        else:
+            env["SINGULARITY_BIND"] = bind_paths
+            
+        if "APPTAINER_BIND" in env:
+            env["APPTAINER_BIND"] += f",{bind_paths}"
+        else:
+            env["APPTAINER_BIND"] = bind_paths
+            
         return env
 
     def ensure_report_file(
@@ -605,13 +618,14 @@ class QSIPrepRunner:
         denoise_method: Any = QSIPrepDenoiseMethod.DWIDENOISE,
         unringing_method: Any = QSIPrepUnringingMethod.MRDEGIBBS,
         separate_all_dwis: bool = False,
-        fs_subjects_dir: Optional[str] = "derivatives/fastsurfer",
         fs_license: Optional[str] = None,
+        eddy_config: Optional[str] = None,
         do_reconall: bool = False,
         bids_filter_file: Optional[str] = None,
         extra_args: str = "--skip-bids-validation --notrack",
         marker_path: Optional[Path] = None,
         report_path: Optional[Path] = None,
+        executable: str = "qsiprep",
     ) -> int:
         """Execute QSIPrep pipeline for a single participant.
 
@@ -625,9 +639,8 @@ class QSIPrepRunner:
             mem_mb: Memory allocation in MB.
             output_resolution: Isotropic voxel resolution in mm for output DWI.
             denoise_method: Denoising method enum or string.
-            unringing_method: Unringing method enum or string.
-            separate_all_dwis: Process DWI series separately if True.
-            fs_subjects_dir: FreeSurfer/FastSurfer subjects directory path.
+            unringing_method: Gibbs unringing method.
+            separate_all_dwis: Process each DWI independently.
             fs_license: FreeSurfer license file path.
             do_reconall: Run FreeSurfer surface reconstruction flag.
             bids_filter_file: BIDS query filter file path.
@@ -645,8 +658,8 @@ class QSIPrepRunner:
             denoise_method=denoise_method,
             unringing_method=unringing_method,
             separate_all_dwis=separate_all_dwis,
-            fs_subjects_dir=fs_subjects_dir,
             fs_license=fs_license,
+            eddy_config=eddy_config,
             do_reconall=do_reconall,
             bids_filter_file=bids_filter_file,
             extra_args=extra_args,
@@ -657,10 +670,7 @@ class QSIPrepRunner:
         )
         builder = QSIPrepCommandBuilder(config)
         cmd = builder.build_participant_command(
-            bids_dir=bids_dir,
-            output_dir=output_dir,
-            subject=subject,
-            work_dir=work_dir,
+            bids_dir, output_dir, subject, work_dir, executable
         )
 
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -668,6 +678,23 @@ class QSIPrepRunner:
         env = self.prepare_environment(tmp_dir, threads, fs_license)
 
         self._logger.info("Executing QSIPrep command: %s", " ".join(cmd))
+        # Dynamically inject root mounts for wrapper-based singularity containers
+        def get_root_mount(path: str) -> str:
+            p = Path(path).resolve()
+            return f"/{p.parts[1]}" if len(p.parts) > 1 else ""
+            
+        roots = set()
+        for p in [bids_dir, output_dir, work_dir, fs_license, eddy_config]:
+            if p:
+                r = get_root_mount(str(p))
+                if r:
+                    roots.add(f"{r}:{r}")
+                    
+        if roots:
+            root_binds = ",".join(roots)
+            for k in ["SINGULARITY_BIND", "APPTAINER_BIND"]:
+                env[k] = f"{root_binds},{env[k]}" if k in env else root_binds
+
         result = subprocess.run(cmd, env=env, check=False)
 
         if result.returncode != 0:
@@ -768,16 +795,14 @@ class QSIPrepApp:
             help="Process separate DWI runs individually",
         )
         parser.add_argument(
-            "--fs-subjects-dir",
-            type=str,
-            default="derivatives/fastsurfer",
-            help="Precomputed FreeSurfer/FastSurfer subjects directory",
-        )
-        parser.add_argument(
             "--fs-license",
             type=str,
-            default="",
-            help="Path to FreeSurfer license file",
+            help="Path to FreeSurfer license file.",
+        )
+        parser.add_argument(
+            "--eddy-config",
+            type=str,
+            help="Path to eddy_params.json file.",
         )
         parser.add_argument(
             "--do-reconall",
@@ -796,6 +821,12 @@ class QSIPrepApp:
             type=str,
             default="--skip-bids-validation --notrack",
             help="Additional CLI flags passed directly to QSIPrep",
+        )
+        parser.add_argument(
+            "--executable",
+            type=str,
+            default="qsiprep",
+            help="Executable name or wrapper",
         )
         parser.add_argument(
             "--marker",
@@ -827,9 +858,6 @@ class QSIPrepApp:
         parser = self.create_parser()
         parsed = parser.parse_args(args)
 
-        fs_sd = (
-            parsed.fs_subjects_dir if parsed.fs_subjects_dir else None
-        )
         fs_lic = (
             parsed.fs_license if parsed.fs_license else None
         )
@@ -849,13 +877,14 @@ class QSIPrepApp:
             denoise_method=parsed.denoise_method,
             unringing_method=parsed.unringing_method,
             separate_all_dwis=parsed.separate_all_dwis,
-            fs_subjects_dir=fs_sd,
             fs_license=fs_lic,
+            eddy_config=parsed.eddy_config,
             do_reconall=parsed.do_reconall,
             bids_filter_file=bids_filt,
             extra_args=parsed.extra_args,
             marker_path=parsed.marker,
             report_path=parsed.report,
+            executable=parsed.executable,
         )
 
 

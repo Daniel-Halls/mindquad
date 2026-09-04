@@ -68,7 +68,7 @@ class FMRIPrepConfig:
         cifti_output: Optional[str] = "91k",
         fs_subjects_dir: Optional[str] = "derivatives/fastsurfer",
         fs_license: Optional[str] = None,
-        fs_no_reconall: bool = False,
+        fs_no_resume: bool = False,
         dummy_scans: Optional[int] = None,
         bids_filter_file: Optional[str] = None,
         extra_args: str = "--skip-bids-validation --notrack",
@@ -86,7 +86,7 @@ class FMRIPrepConfig:
             cifti_output: CIFTI grayordinates resolution ('91k' or '170k').
             fs_subjects_dir: Path to FreeSurfer/FastSurfer subjects.
             fs_license: Path to FreeSurfer license file.
-            fs_no_reconall: Skip FreeSurfer surface reconstruction flag.
+            fs_no_resume: Skip FreeSurfer surface reconstruction flag.
             dummy_scans: Number of non-steady-state volumes to drop.
             bids_filter_file: Path to custom BIDS query filter JSON file.
             extra_args: Extra flags passed directly to fMRIPrep.
@@ -105,7 +105,7 @@ class FMRIPrepConfig:
         self._cifti_output = cifti_output
         self._fs_subjects_dir = fs_subjects_dir
         self._fs_license = fs_license
-        self._fs_no_reconall = fs_no_reconall
+        self._fs_no_resume = fs_no_resume
         self._dummy_scans = dummy_scans
         self._bids_filter_file = bids_filter_file
         self._extra_args = extra_args
@@ -145,9 +145,9 @@ class FMRIPrepConfig:
         return self._fs_license
 
     @property
-    def fs_no_reconall(self) -> bool:
+    def fs_no_resume(self) -> bool:
         """Return True if recon-all surface reconstruction is disabled."""
-        return self._fs_no_reconall
+        return self._fs_no_resume
 
     @property
     def dummy_scans(self) -> Optional[int]:
@@ -239,6 +239,7 @@ class FMRIPrepCommandBuilder:
         output_dir: Path,
         subject: str,
         work_dir: Path,
+        executable: str = "fmriprep",
     ) -> List[str]:
         """Build command token list for participant-level fMRIPrep execution.
 
@@ -252,8 +253,8 @@ class FMRIPrepCommandBuilder:
             List of CLI command tokens.
         """
         clean_subject = subject.replace("sub-", "").strip()
-        cmd: List[str] = [
-            "fmriprep",
+        import shlex
+        cmd: List[str] = shlex.split(executable) + [
             str(bids_dir),
             str(output_dir),
             "participant",
@@ -288,8 +289,8 @@ class FMRIPrepCommandBuilder:
             else:
                 cmd.append("--cifti-output")
 
-        if self._config.fs_no_reconall:
-            cmd.append("--fs-no-reconall")
+        if self._config.fs_no_resume:
+            cmd.append("--fs-no-resume")
 
         if self._config.dummy_scans is not None:
             cmd.extend(["--dummy-scans", str(self._config.dummy_scans)])
@@ -461,6 +462,19 @@ class FMRIPrepRunner:
         env["OMP_NUM_THREADS"] = str(threads)
         env["OPENBLAS_NUM_THREADS"] = str(threads)
         env["MKL_NUM_THREADS"] = str(threads)
+        
+        # Ensure Singularity/Apptainer mounts host directories
+        bind_paths = f"{tmp_dir}:/tmp,{tmp_dir}:/var/tmp"
+        if "SINGULARITY_BIND" in env:
+            env["SINGULARITY_BIND"] += f",{bind_paths}"
+        else:
+            env["SINGULARITY_BIND"] = bind_paths
+            
+        if "APPTAINER_BIND" in env:
+            env["APPTAINER_BIND"] += f",{bind_paths}"
+        else:
+            env["APPTAINER_BIND"] = bind_paths
+            
         if fs_license and fs_license.strip():
             env["FS_LICENSE"] = str(fs_license).strip()
         return env
@@ -517,12 +531,13 @@ class FMRIPrepRunner:
         cifti_output: Optional[str] = "91k",
         fs_subjects_dir: Optional[str] = "derivatives/fastsurfer",
         fs_license: Optional[str] = None,
-        fs_no_reconall: bool = False,
+        fs_no_resume: bool = False,
         dummy_scans: Optional[int] = None,
         bids_filter_file: Optional[str] = None,
         extra_args: str = "--skip-bids-validation --notrack",
         marker_path: Optional[Path] = None,
         report_path: Optional[Path] = None,
+        executable: str = "fmriprep",
     ) -> int:
         """Execute fMRIPrep pipeline for a single participant.
 
@@ -538,7 +553,7 @@ class FMRIPrepRunner:
             cifti_output: CIFTI grayordinates output mode ('91k' or '170k').
             fs_subjects_dir: FreeSurfer/FastSurfer subjects directory path.
             fs_license: FreeSurfer license file path.
-            fs_no_reconall: Skip recon-all flag.
+            fs_no_resume: Skip recon-all flag.
             dummy_scans: Dummy scans count.
             bids_filter_file: BIDS query filter file path.
             extra_args: Extra command line flags.
@@ -555,7 +570,7 @@ class FMRIPrepRunner:
             cifti_output=cifti_output,
             fs_subjects_dir=fs_subjects_dir,
             fs_license=fs_license,
-            fs_no_reconall=fs_no_reconall,
+            fs_no_resume=fs_no_resume,
             dummy_scans=dummy_scans,
             bids_filter_file=bids_filter_file,
             extra_args=extra_args,
@@ -570,13 +585,42 @@ class FMRIPrepRunner:
             output_dir=output_dir,
             subject=subject,
             work_dir=work_dir,
+            executable=executable,
         )
 
         output_dir.mkdir(parents=True, exist_ok=True)
         work_dir.mkdir(parents=True, exist_ok=True)
         env = self.prepare_environment(tmp_dir, threads, fs_license)
 
+        if fs_subjects_dir:
+            clean_sub = subject.replace("sub-", "").strip()
+            scripts_dir = Path(fs_subjects_dir) / f"sub-{clean_sub}" / "scripts"
+            if scripts_dir.exists():
+                for lock_file in scripts_dir.glob("IsRunning.*"):
+                    try:
+                        lock_file.unlink()
+                        self._logger.info("Removed leftover FreeSurfer lock file: %s", lock_file)
+                    except Exception as e:
+                        self._logger.warning("Failed to remove lock file %s: %s", lock_file, e)
+
         self._logger.info("Executing fMRIPrep command: %s", " ".join(cmd))
+        # Dynamically inject root mounts for wrapper-based singularity containers
+        def get_root_mount(path: str) -> str:
+            p = Path(path).resolve()
+            return f"/{p.parts[1]}" if len(p.parts) > 1 else ""
+            
+        roots = set()
+        for p in [bids_dir, output_dir, work_dir, fs_subjects_dir, fs_license]:
+            if p:
+                r = get_root_mount(str(p))
+                if r:
+                    roots.add(f"{r}:{r}")
+                    
+        if roots:
+            root_binds = ",".join(roots)
+            for k in ["SINGULARITY_BIND", "APPTAINER_BIND"]:
+                env[k] = f"{root_binds},{env[k]}" if k in env else root_binds
+
         result = subprocess.run(cmd, env=env, check=False)
 
         if result.returncode != 0:
@@ -677,7 +721,7 @@ class FMRIPrepApp:
             help="Path to FreeSurfer license file",
         )
         parser.add_argument(
-            "--fs-no-reconall",
+            "--fs-no-resume",
             action="store_true",
             default=False,
             help="Disable FreeSurfer surface reconstruction",
@@ -699,6 +743,12 @@ class FMRIPrepApp:
             type=str,
             default="--skip-bids-validation --notrack",
             help="Additional CLI flags passed directly to fMRIPrep",
+        )
+        parser.add_argument(
+            "--executable",
+            type=str,
+            default="fmriprep",
+            help="Executable name or wrapper",
         )
         parser.add_argument(
             "--marker",
@@ -758,12 +808,13 @@ class FMRIPrepApp:
             cifti_output=cifti_mode,
             fs_subjects_dir=fs_sd,
             fs_license=fs_lic,
-            fs_no_reconall=parsed.fs_no_reconall,
+            fs_no_resume=parsed.fs_no_resume,
             dummy_scans=parsed.dummy_scans,
             bids_filter_file=bids_filt,
             extra_args=parsed.extra_args,
             marker_path=parsed.marker,
             report_path=parsed.report,
+            executable=parsed.executable,
         )
 
 

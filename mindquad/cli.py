@@ -66,6 +66,20 @@ def parse_arguments() -> argparse.Namespace:
         type=str,
         help="YAML file containing additional snakemake arguments.",
     )
+    parser.add_argument(
+        "-g",
+        "--go",
+        action="store_true",
+        default=False,
+        help="Ignore code/param changes and only trigger reruns based on file modification times.",
+    )
+    parser.add_argument(
+        "-u",
+        "--unlock",
+        action="store_true",
+        default=False,
+        help="Unlock the working directory.",
+    )
 
     return parser.parse_args()
 
@@ -92,6 +106,12 @@ def build_snakemake_command(args: argparse.Namespace, snakefile_path: str) -> Li
 
     if args.submit:
         cmd.extend(["--profile", args.submit])
+
+    if args.go:
+        cmd.extend(["--rerun-triggers", "mtime"])
+
+    if args.unlock:
+        cmd.extend(["--unlock"])
 
     if args.makefile:
         if not os.path.isfile(args.makefile):

@@ -1,3 +1,4 @@
+import sys
 """Snakemake rules for MRIQC participant and group level quality control."""
 
 from pathlib import Path
@@ -12,6 +13,9 @@ rule mriqc_participant:
         marker=get_mriqc_dir() + "/sub-{subject}/.mriqc_complete",
         report=get_mriqc_dir() + "/sub-{subject}.html",
     params:
+        python_bin=sys.executable,
+        env_cmd=get_tool_env_cmd("mriqc"),
+        executable=get_tool_executable("mriqc", "mriqc"),
         scripts_dir=get_scripts_dir(),
         bids_dir=get_bids_dir(),
         out_dir=get_mriqc_dir(),
@@ -22,10 +26,11 @@ rule mriqc_participant:
         ),
         tmp_dir=get_tmp_dir(),
         extra_args=get_mriqc_extra_args(),
-    threads: 2
+    threads: get_mriqc_threads()
     shell:
         """
-        python "{params.scripts_dir}"/mriqc_helper.py participant \
+        {params.env_cmd}
+        {params.python_bin} "{params.scripts_dir}"/mriqc_helper.py participant \
             --bids-dir "{params.bids_dir}" \
             --output-dir "{params.out_dir}" \
             --subject "{params.subject}" \
@@ -35,7 +40,8 @@ rule mriqc_participant:
             --modalities {params.modalities} \
             --marker "{output.marker}" \
             --report "{output.report}" \
-            --extra-args "{params.extra_args}"
+            --extra-args "{params.extra_args}" \
+            --executable "{params.executable}"
         """
 
 
@@ -49,6 +55,9 @@ rule mriqc_group:
     output:
         group_marker=get_mriqc_dir() + "/.mriqc_group_complete",
     params:
+        python_bin=sys.executable,
+        env_cmd=get_tool_env_cmd("mriqc"),
+        executable=get_tool_executable("mriqc", "mriqc"),
         scripts_dir=get_scripts_dir(),
         bids_dir=get_bids_dir(),
         out_dir=get_mriqc_dir(),
@@ -56,10 +65,11 @@ rule mriqc_group:
         work_dir=str(Path(get_work_dir()) / "mriqc" / "group"),
         tmp_dir=get_tmp_dir(),
         extra_args=get_mriqc_extra_args(),
-    threads: 2
+    threads: get_mriqc_threads()
     shell:
         """
-        python "{params.scripts_dir}"/mriqc_helper.py group \
+        {params.env_cmd}
+        {params.python_bin} "{params.scripts_dir}"/mriqc_helper.py group \
             --bids-dir "{params.bids_dir}" \
             --output-dir "{params.out_dir}" \
             --work-dir "{params.work_dir}" \
@@ -67,5 +77,6 @@ rule mriqc_group:
             --threads {threads} \
             --modalities {params.modalities} \
             --marker "{output.group_marker}" \
-            --extra-args "{params.extra_args}"
+            --extra-args "{params.extra_args}" \
+            --executable "{params.executable}"
         """

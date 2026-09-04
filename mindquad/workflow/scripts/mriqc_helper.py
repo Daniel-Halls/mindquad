@@ -56,7 +56,7 @@ class MRIQCConfig:
         )
         self._threads = threads
         self._mem_gb = mem_gb
-        self._extra_args = extra_args
+        self._extra_args = extra_args if extra_args is not None else ""
         self._bids_dir = bids_dir
         self._derivatives_dir = derivatives_dir
         self._work_dir = work_dir
@@ -153,6 +153,7 @@ class MRIQCCommandBuilder:
         output_dir: str,
         subject: str,
         work_dir: str,
+        executable: str = "mriqc",
     ) -> List[str]:
         """Build command argument list for participant-level MRIQC execution.
 
@@ -161,13 +162,14 @@ class MRIQCCommandBuilder:
             output_dir: Path to MRIQC derivatives output directory.
             subject: Subject identifier (without 'sub-' prefix).
             work_dir: Path to intermediate working directory for this subject.
+            executable: Base executable command.
 
         Returns:
             List of CLI command tokens.
         """
         clean_subject = subject.replace("sub-", "").strip()
-        cmd: List[str] = [
-            "mriqc",
+        import shlex
+        cmd: List[str] = shlex.split(executable) + [
             str(Path(bids_dir)),
             str(Path(output_dir)),
             "participant",
@@ -193,6 +195,7 @@ class MRIQCCommandBuilder:
         bids_dir: str,
         output_dir: str,
         work_dir: str,
+        executable: str = "mriqc",
     ) -> List[str]:
         """Build command argument list for group-level MRIQC execution.
 
@@ -200,12 +203,13 @@ class MRIQCCommandBuilder:
             bids_dir: Path to BIDS dataset directory.
             output_dir: Path to MRIQC derivatives output directory.
             work_dir: Path to intermediate working directory for group level.
+            executable: Base executable command.
 
         Returns:
             List of CLI command tokens.
         """
-        cmd: List[str] = [
-            "mriqc",
+        import shlex
+        cmd: List[str] = shlex.split(executable) + [
             str(Path(bids_dir)),
             str(Path(output_dir)),
             "group",
@@ -299,8 +303,20 @@ class MRIQCRunner:
         env["OMP_NUM_THREADS"] = str(threads)
         env["OPENBLAS_NUM_THREADS"] = str(threads)
         env["MKL_NUM_THREADS"] = str(threads)
+        
+        # Ensure Singularity/Apptainer mounts host directories
+        bind_paths = f"{tmp_dir}:/tmp,{tmp_dir}:/var/tmp"
+        if "SINGULARITY_BIND" in env:
+            env["SINGULARITY_BIND"] += f",{bind_paths}"
+        else:
+            env["SINGULARITY_BIND"] = bind_paths
+            
+        if "APPTAINER_BIND" in env:
+            env["APPTAINER_BIND"] += f",{bind_paths}"
+        else:
+            env["APPTAINER_BIND"] = bind_paths
+            
         return env
-
     def _ensure_report_file(
         self, output_dir: Path, subject: str, target_report: Optional[Path]
     ) -> Optional[Path]:
@@ -346,6 +362,7 @@ class MRIQCRunner:
         extra_args: str = "--verbose-reports --no-sub",
         marker_path: Optional[Path] = None,
         report_path: Optional[Path] = None,
+        executable: str = "mriqc",
     ) -> int:
         """Execute participant-level MRIQC pipeline.
 
@@ -375,7 +392,7 @@ class MRIQCRunner:
         )
         builder = MRIQCCommandBuilder(config)
         cmd = builder.build_participant_command(
-            str(bids_dir), str(output_dir), subject, str(work_dir)
+            str(bids_dir), str(output_dir), subject, str(work_dir), executable
         )
 
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -383,6 +400,23 @@ class MRIQCRunner:
         env = self._prepare_environment(tmp_dir, threads)
 
         self._logger.info("Executing MRIQC participant: %s", " ".join(cmd))
+        # Dynamically inject root mounts for wrapper-based singularity containers
+        def get_root_mount(path: str) -> str:
+            p = Path(path).resolve()
+            return f"/{p.parts[1]}" if len(p.parts) > 1 else ""
+            
+        roots = set()
+        for p in [bids_dir, output_dir, work_dir]:
+            if p:
+                r = get_root_mount(str(p))
+                if r:
+                    roots.add(f"{r}:{r}")
+                    
+        if roots:
+            root_binds = ",".join(roots)
+            for k in ["SINGULARITY_BIND", "APPTAINER_BIND"]:
+                env[k] = f"{root_binds},{env[k]}" if k in env else root_binds
+
         result = subprocess.run(cmd, env=env, check=False)
         if result.returncode != 0:
             self._logger.error(
@@ -408,6 +442,7 @@ class MRIQCRunner:
         modalities: Optional[List[str]] = None,
         extra_args: str = "--verbose-reports --no-sub",
         marker_path: Optional[Path] = None,
+        executable: str = "mriqc",
     ) -> int:
         """Execute group-level MRIQC pipeline.
 
@@ -435,7 +470,7 @@ class MRIQCRunner:
         )
         builder = MRIQCCommandBuilder(config)
         cmd = builder.build_group_command(
-            str(bids_dir), str(output_dir), str(work_dir)
+            str(bids_dir), str(output_dir), str(work_dir), executable
         )
 
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -443,6 +478,23 @@ class MRIQCRunner:
         env = self._prepare_environment(tmp_dir, threads)
 
         self._logger.info("Executing MRIQC group: %s", " ".join(cmd))
+        # Dynamically inject root mounts for wrapper-based singularity containers
+        def get_root_mount(path: str) -> str:
+            p = Path(path).resolve()
+            return f"/{p.parts[1]}" if len(p.parts) > 1 else ""
+            
+        roots = set()
+        for p in [bids_dir, output_dir, work_dir]:
+            if p:
+                r = get_root_mount(str(p))
+                if r:
+                    roots.add(f"{r}:{r}")
+                    
+        if roots:
+            root_binds = ",".join(roots)
+            for k in ["SINGULARITY_BIND", "APPTAINER_BIND"]:
+                env[k] = f"{root_binds},{env[k]}" if k in env else root_binds
+
         result = subprocess.run(cmd, env=env, check=False)
         if result.returncode != 0:
             self._logger.error(
@@ -494,6 +546,7 @@ class MRIQCApp:
         )
         part_parser.add_argument("--marker", type=Path, default=None)
         part_parser.add_argument("--report", type=Path, default=None)
+        part_parser.add_argument("--executable", type=str, default="mriqc")
 
         # Group subcommand
         group_parser = subparsers.add_parser("group")
@@ -511,6 +564,7 @@ class MRIQCApp:
             default="--verbose-reports --no-sub",
         )
         group_parser.add_argument("--marker", type=Path, default=None)
+        group_parser.add_argument("--executable", type=str, default="mriqc")
 
         return parser
 
@@ -542,6 +596,7 @@ class MRIQCApp:
                 extra_args=parsed.extra_args,
                 marker_path=parsed.marker,
                 report_path=parsed.report,
+                executable=parsed.executable,
             )
         elif parsed.mode == "group":
             return self._runner.run_group(
@@ -553,6 +608,7 @@ class MRIQCApp:
                 modalities=parsed.modalities,
                 extra_args=parsed.extra_args,
                 marker_path=parsed.marker,
+                executable=parsed.executable,
             )
         return 1
 

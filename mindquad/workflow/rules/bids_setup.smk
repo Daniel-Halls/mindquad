@@ -1,3 +1,4 @@
+import sys
 """Snakemake rules for BIDS dataset initialization and DICOM to BIDS conversion."""
 
 
@@ -8,6 +9,7 @@ rule bids_init_dataset:
         readme=get_bids_dir() + "/README",
         bidsignore=get_bids_dir() + "/.bidsignore",
     params:
+        python_bin=sys.executable,
         scripts_dir=get_scripts_dir(),
         bids_dir=get_bids_dir(),
         name=config.get("dataset_description", {}).get(
@@ -19,7 +21,7 @@ rule bids_init_dataset:
         license=config.get("dataset_description", {}).get("License", "CC0"),
     shell:
         """
-        python "{params.scripts_dir}"/bids_init.py \
+        {params.python_bin} "{params.scripts_dir}"/bids_init.py \
             --bids-dir "{params.bids_dir}" \
             --name "{params.name}" \
             --bids-version "{params.bids_version}" \
@@ -34,15 +36,18 @@ rule dcm2niix_convert_subject:
     output:
         converted_marker=get_work_dir() + "/sub-{subject}/dcm2niix/.converted",
     params:
+        python_bin=sys.executable,
+        env_cmd=get_tool_env_cmd("dcm2niix"),
+        executable=get_tool_executable("dcm2niix", "dcm2niix"),
         out_dir=get_work_dir() + "/sub-{subject}/dcm2niix",
         tmp_dir=get_tmp_dir(),
         args=config.get("dcm2niix", {}).get("args", "-z y -b y -ba y -f %p_%s"),
-    threads: 2
+    threads: get_bids_threads()
     shell:
         """
-        module load dcm2niix-img 2>/dev/null || module load dcm2niix 2>/dev/null || true
+        {params.env_cmd}
         mkdir -p "{params.tmp_dir}" "{params.out_dir}"
-        TMPDIR="{params.tmp_dir}" dcm2niix {params.args} -o "{params.out_dir}" "{input.raw_dir}"
+        TMPDIR="{params.tmp_dir}" {params.executable} {params.args} -o "{params.out_dir}" "{input.raw_dir}"
         touch "{output.converted_marker}"
         """
 
@@ -55,14 +60,15 @@ checkpoint organize_bids_subject:
     output:
         bids_marker=get_bids_dir() + "/sub-{subject}/.bids_organized",
     params:
+        python_bin=sys.executable,
         scripts_dir=get_scripts_dir(),
         input_dir=get_work_dir() + "/sub-{subject}/dcm2niix",
         bids_dir=get_bids_dir(),
         subject="{subject}",
-    threads: 1
+    threads: get_bids_threads()
     shell:
         """
-        python "{params.scripts_dir}"/bids_organizer.py \
+        {params.python_bin} "{params.scripts_dir}"/bids_organizer.py \
             --input-dir "{params.input_dir}" \
             --bids-dir "{params.bids_dir}" \
             --subject "{params.subject}" \

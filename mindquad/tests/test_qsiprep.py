@@ -172,7 +172,6 @@ class TestQSIPrepConfig(unittest.TestCase):
             config.unringing_method, QSIPrepUnringingMethod.MRDEGIBBS
         )
         self.assertFalse(config.separate_all_dwis)
-        self.assertEqual(config.fs_subjects_dir, "derivatives/fastsurfer")
         self.assertIsNone(config.fs_license)
         self.assertFalse(config.do_reconall)
         self.assertIsNone(config.bids_filter_file)
@@ -192,7 +191,6 @@ class TestQSIPrepConfig(unittest.TestCase):
             denoise_method="patch2self",
             unringing_method="rpg",
             separate_all_dwis=True,
-            fs_subjects_dir="/custom/fastsurfer",
             fs_license="/opt/freesurfer/license.txt",
             do_reconall=True,
             bids_filter_file="config/filter.json",
@@ -212,7 +210,6 @@ class TestQSIPrepConfig(unittest.TestCase):
             config.unringing_method, QSIPrepUnringingMethod.RPG
         )
         self.assertTrue(config.separate_all_dwis)
-        self.assertEqual(config.fs_subjects_dir, "/custom/fastsurfer")
         self.assertEqual(config.fs_license, "/opt/freesurfer/license.txt")
         self.assertTrue(config.do_reconall)
         self.assertEqual(config.bids_filter_file, "config/filter.json")
@@ -281,8 +278,6 @@ class TestQSIPrepCommandBuilder(unittest.TestCase):
             "dwidenoise",
             "--unringing-method",
             "mrdegibbs",
-            "--fs-subjects-dir",
-            "derivatives/fastsurfer",
             "--skip-bids-validation",
             "--notrack",
         ]
@@ -310,7 +305,6 @@ class TestQSIPrepCommandBuilder(unittest.TestCase):
             denoise_method="patch2self",
             unringing_method="rpg",
             separate_all_dwis=True,
-            fs_subjects_dir="derivatives/fastsurfer",
             fs_license="/opt/freesurfer/license.txt",
             do_reconall=True,
             bids_filter_file="config/filter.json",
@@ -344,8 +338,6 @@ class TestQSIPrepCommandBuilder(unittest.TestCase):
             "patch2self",
             "--unringing-method",
             "rpg",
-            "--fs-subjects-dir",
-            "derivatives/fastsurfer",
             "--fs-license-file",
             "/opt/freesurfer/license.txt",
             "--do-reconall",
@@ -362,7 +354,6 @@ class TestQSIPrepCommandBuilder(unittest.TestCase):
         config = QSIPrepConfig(
             denoise_method=QSIPrepDenoiseMethod.NONE,
             unringing_method=QSIPrepUnringingMethod.NONE,
-            fs_subjects_dir="",
             fs_license="",
         )
         builder = QSIPrepCommandBuilder(config)
@@ -374,7 +365,6 @@ class TestQSIPrepCommandBuilder(unittest.TestCase):
         )
         self.assertNotIn("--denoise-method", cmd)
         self.assertNotIn("--unringing-method", cmd)
-        self.assertNotIn("--fs-subjects-dir", cmd)
         self.assertNotIn("--fs-license-file", cmd)
 
 
@@ -635,7 +625,6 @@ class TestQSIPrepApp(unittest.TestCase):
             "--denoise-method", "dwidenoise",
             "--unringing-method", "mrdegibbs",
             "--separate-all-dwis",
-            "--fs-subjects-dir", "derivatives/fastsurfer",
             "--fs-license", "/opt/fs/license.txt",
             "--do-reconall",
             "--extra-args=--notrack",
@@ -652,7 +641,6 @@ class TestQSIPrepApp(unittest.TestCase):
         self.assertEqual(args.denoise_method, "dwidenoise")
         self.assertEqual(args.unringing_method, "mrdegibbs")
         self.assertTrue(args.separate_all_dwis)
-        self.assertEqual(args.fs_subjects_dir, "derivatives/fastsurfer")
         self.assertEqual(args.fs_license, "/opt/fs/license.txt")
         self.assertTrue(args.do_reconall)
         self.assertEqual(args.extra_args, "--notrack")

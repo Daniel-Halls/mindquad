@@ -1,3 +1,4 @@
+import sys
 """Snakemake rules for Human Connectome Project (HCP) PostFreeSurfer pipeline."""
 
 from pathlib import Path
@@ -23,6 +24,9 @@ rule hcp_postfreesurfer:
             "sub-{subject}.32k_fs_LR.wb.spec"
         ),
     params:
+        python_bin=sys.executable,
+        env_cmd=get_tool_env_cmd("hcp"),
+        executable=get_tool_executable("hcp", "PostFreeSurferPipeline.sh"),
         scripts_dir=get_scripts_dir(),
         t1w=get_t1w_image,
         coreg_t2w=get_coregistered_t2w_image,
@@ -44,11 +48,11 @@ rule hcp_postfreesurfer:
         ref_myelin_maps=get_hcp_ref_myelin_maps(),
         tmp_dir=get_tmp_dir(),
         extra_args=get_hcp_extra_args(),
-    threads: 2
+    threads: get_hcp_threads()
     shell:
         """
-        module load hcppipelines 2>/dev/null || true
-        python "{params.scripts_dir}"/hcp_helper.py \
+        {params.env_cmd}
+        {params.python_bin} "{params.scripts_dir}"/hcp_helper.py \
             --study-folder "{params.study_folder}" \
             --subject "{params.subject}" \
             --fs-dir "{params.fs_dir}" \
@@ -69,5 +73,6 @@ rule hcp_postfreesurfer:
             --tmp-dir "{params.tmp_dir}" \
             --marker "{output.marker}" \
             --spec "{output.spec}" \
-            --extra-args "{params.extra_args}"
+            --extra-args "{params.extra_args}" \
+            --executable "{params.executable}"
         """

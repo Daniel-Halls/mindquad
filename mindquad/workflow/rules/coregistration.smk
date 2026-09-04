@@ -1,3 +1,4 @@
+import sys
 """Snakemake rules for T2w to T1w diffeomorphic coregistration."""
 
 from pathlib import Path
@@ -7,6 +8,7 @@ rule coregister_t2_to_t1:
     """Run diffeomorphic SyN alignment of T2w to T1w structural scan."""
     input:
         bids_marker=get_bids_dir() + "/sub-{subject}/.bids_organized",
+        fastsurfer_marker=get_fastsurfer_dir() + "/sub-{subject}/.fastsurfer_complete",
     output:
         marker=(
             get_coregistration_dir() + "/sub-{subject}/.coregistration_complete"
@@ -17,6 +19,8 @@ rule coregister_t2_to_t1:
         ),
         report=get_coregistration_dir() + "/sub-{subject}.html",
     params:
+        python_bin=sys.executable,
+        env_cmd=get_tool_env_cmd("coregistration"),
         scripts_dir=get_scripts_dir(),
         t1w=get_t1w_image,
         t2w=get_t2w_image,
@@ -30,10 +34,11 @@ rule coregister_t2_to_t1:
         step_length=get_coregistration_step_length(),
         tmp_dir=get_tmp_dir(),
         extra_args=get_coregistration_extra_args(),
-    threads: 2
+    threads: get_coregistration_threads()
     shell:
         """
-        python "{params.scripts_dir}"/coregistration_helper.py \
+        {params.env_cmd}
+        {params.python_bin} "{params.scripts_dir}"/coregistration_helper.py \
             --t1 "{params.t1w}" \
             --t2 "{params.t2w}" \
             --output-dir "{params.out_dir}" \

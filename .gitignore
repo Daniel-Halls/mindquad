@@ -225,3 +225,4 @@ AGENTS.md
 work/
 bids/
 derivatives/
+*.code-workspace

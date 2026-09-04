@@ -427,7 +427,6 @@ class TestHCPCommandBuilder(unittest.TestCase):
             "--grayordinatesres=2",
             "--hiresmesh=164",
             "--lowresmesh=32",
-            "--thickness-regression=BOTH",
         ]
         self.assertEqual(cmd, expected_start)
 
@@ -458,7 +457,6 @@ class TestHCPCommandBuilder(unittest.TestCase):
         self.assertIn("--processing-mode=LegacyStyleData", cmd)
         self.assertIn("--regname=FS", cmd)
         self.assertIn("--grayordinatesres=1", cmd)
-        self.assertIn("--thickness-regression=OLD", cmd)
         self.assertIn("--surfatlasdir=/atlases", cmd)
         self.assertIn("--grayordinatesdir=/grayordinates", cmd)
         self.assertIn("--subcortgraylabels=/labels/subcort.txt", cmd)

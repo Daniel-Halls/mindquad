@@ -97,7 +97,7 @@ class TestFMRIPrepConfig(unittest.TestCase):
         self.assertEqual(config.cifti_output, "91k")
         self.assertEqual(config.fs_subjects_dir, "derivatives/fastsurfer")
         self.assertIsNone(config.fs_license)
-        self.assertFalse(config.fs_no_reconall)
+        self.assertFalse(config.fs_no_resume)
         self.assertIsNone(config.dummy_scans)
         self.assertIsNone(config.bids_filter_file)
         self.assertEqual(config.extra_args, "--skip-bids-validation --notrack")
@@ -116,7 +116,7 @@ class TestFMRIPrepConfig(unittest.TestCase):
             cifti_output="170k",
             fs_subjects_dir="/custom/fastsurfer",
             fs_license="/opt/freesurfer/license.txt",
-            fs_no_reconall=True,
+            fs_no_resume=True,
             dummy_scans=4,
             bids_filter_file="config/filter.json",
             extra_args="--verbose-reports",
@@ -131,7 +131,7 @@ class TestFMRIPrepConfig(unittest.TestCase):
         self.assertEqual(config.cifti_output, "170k")
         self.assertEqual(config.fs_subjects_dir, "/custom/fastsurfer")
         self.assertEqual(config.fs_license, "/opt/freesurfer/license.txt")
-        self.assertTrue(config.fs_no_reconall)
+        self.assertTrue(config.fs_no_resume)
         self.assertEqual(config.dummy_scans, 4)
         self.assertEqual(config.bids_filter_file, "config/filter.json")
         self.assertEqual(config.extra_args, "--verbose-reports")
@@ -237,7 +237,7 @@ class TestFMRIPrepCommandBuilder(unittest.TestCase):
             cifti_output=None,
             fs_subjects_dir="derivatives/fastsurfer",
             fs_license="/opt/freesurfer/license.txt",
-            fs_no_reconall=True,
+            fs_no_resume=True,
             dummy_scans=2,
             bids_filter_file="config/filter.json",
             extra_args="--verbose-reports --no-sub",
@@ -270,7 +270,7 @@ class TestFMRIPrepCommandBuilder(unittest.TestCase):
             "derivatives/fastsurfer",
             "--fs-license-file",
             "/opt/freesurfer/license.txt",
-            "--fs-no-reconall",
+            "--fs-no-resume",
             "--dummy-scans",
             "2",
             "--bids-filter-file",

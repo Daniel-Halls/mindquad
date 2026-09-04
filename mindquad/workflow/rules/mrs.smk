@@ -1,3 +1,4 @@
+import sys
 """Snakemake rules for Magnetic Resonance Spectroscopy (MRS) processing with FSL-MRS."""
 
 from pathlib import Path
@@ -7,11 +8,14 @@ rule mrs_processing:
     """Run MRS preprocessing, voxel tissue segmentation, and spectral fitting with FSL-MRS."""
     input:
         bids_marker=get_bids_dir() + "/sub-{subject}/.bids_organized",
+        fastsurfer_marker=get_fastsurfer_dir() + "/sub-{subject}/.fastsurfer_complete",
     output:
         marker=get_mrs_dir() + "/sub-{subject}/.mrs_complete",
         report=get_mrs_dir() + "/sub-{subject}.html",
         quantities=get_mrs_dir() + "/sub-{subject}/quantities.csv",
     params:
+        python_bin=sys.executable,
+        env_cmd=get_tool_env_cmd("mrs"),
         scripts_dir=get_scripts_dir(),
         svs=get_mrs_svs_image,
         t1w=get_t1w_image,
@@ -31,10 +35,11 @@ rule mrs_processing:
         ),
         tmp_dir=get_tmp_dir(),
         extra_args=get_mrs_extra_args(),
-    threads: 2
+    threads: get_mrs_threads()
     shell:
         """
-        python "{params.scripts_dir}"/mrs_helper.py \
+        {params.env_cmd}
+        {params.python_bin} "{params.scripts_dir}"/mrs_helper.py \
             --data "{params.svs}" \
             --t1 "{params.t1w}" \
             --reference "{params.water_ref}" \

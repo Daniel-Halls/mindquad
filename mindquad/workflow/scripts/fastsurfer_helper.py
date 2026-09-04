@@ -178,6 +178,7 @@ class FastSurferCommandBuilder:
         t1_path: Path,
         subjects_dir: Path,
         subject_id: str,
+        executable: str = "run_fastsurfer.sh",
     ) -> List[str]:
         """Build command argument list for FastSurfer execution.
 
@@ -190,8 +191,18 @@ class FastSurferCommandBuilder:
             List of CLI command tokens.
         """
         clean_sid = subject_id.strip()
-        cmd: List[str] = [
-            "run_fastsurfer.sh",
+        
+        cmd: List[str] = []
+        if executable.startswith("singularity run"):
+            # Don't prefix with bash if it's a singularity wrapper command
+            import shlex
+            cmd.extend(shlex.split(executable))
+        else:
+            import shutil
+            resolved_exe = shutil.which(executable) or executable
+            cmd.extend(["bash", resolved_exe])
+            
+        cmd.extend([
             "--t1",
             str(t1_path),
             "--sd",
@@ -200,7 +211,7 @@ class FastSurferCommandBuilder:
             clean_sid,
             "--threads",
             str(self._config.threads),
-        ]
+        ])
 
         if self._config.device:
             cmd.extend(["--device", self._config.device.value])
@@ -215,6 +226,10 @@ class FastSurferCommandBuilder:
             cmd.append("--seg_only")
         elif self._config.surf_only:
             cmd.append("--surf_only")
+
+        # Always generate FreeSurfer-compatible parcellations for fMRIPrep
+        if "--fsaparc" not in cmd and not self._config.seg_only:
+            cmd.append("--fsaparc")
 
         if self._config.parallel:
             cmd.append("--parallel")
@@ -404,6 +419,26 @@ class FastSurferRunner:
         env["OMP_NUM_THREADS"] = str(threads)
         env["OPENBLAS_NUM_THREADS"] = str(threads)
         env["MKL_NUM_THREADS"] = str(threads)
+        
+        # Ensure Singularity/Apptainer mounts host directories
+        bind_paths = f"{tmp_dir}:/tmp,{tmp_dir}:/var/tmp"
+        if "SINGULARITY_BIND" in env:
+            env["SINGULARITY_BIND"] += f",{bind_paths}"
+        else:
+            env["SINGULARITY_BIND"] = bind_paths
+            
+        if "APPTAINER_BIND" in env:
+            env["APPTAINER_BIND"] += f",{bind_paths}"
+        else:
+            env["APPTAINER_BIND"] = bind_paths
+            
+        # Force Singularity to mount NVIDIA drivers
+        env["SINGULARITY_NV"] = "1"
+        env["APPTAINER_NV"] = "1"
+        
+        # Force PyTorch to use exactly one GPU
+        env["CUDA_VISIBLE_DEVICES"] = "0"
+            
         if fs_license and fs_license.strip():
             env["FS_LICENSE"] = str(fs_license).strip()
         return env
@@ -419,6 +454,7 @@ class FastSurferRunner:
         fs_license: Optional[str] = None,
         extra_args: str = "",
         marker_path: Optional[Path] = None,
+        executable: str = "run_fastsurfer.sh",
     ) -> int:
         """Execute FastSurfer pipeline for a structural T1w volume.
 
@@ -443,12 +479,29 @@ class FastSurferRunner:
             extra_args=extra_args,
         )
         builder = FastSurferCommandBuilder(config)
-        cmd = builder.build_command(t1_path, subjects_dir, subject_id)
+        cmd = builder.build_command(t1_path, subjects_dir, subject_id, executable)
 
         subjects_dir.mkdir(parents=True, exist_ok=True)
         env = self.prepare_environment(tmp_dir, threads, fs_license)
 
         self._logger.info("Executing FastSurfer command: %s", " ".join(cmd))
+        # Dynamically inject root mounts for wrapper-based singularity containers
+        def get_root_mount(path: str) -> str:
+            p = Path(path).resolve()
+            return f"/{p.parts[1]}" if len(p.parts) > 1 else ""
+            
+        roots = set()
+        for p in [t1_path, subjects_dir, fs_license]:
+            if p:
+                r = get_root_mount(str(p))
+                if r:
+                    roots.add(f"{r}:{r}")
+                    
+        if roots:
+            root_binds = ",".join(roots)
+            for k in ["SINGULARITY_BIND", "APPTAINER_BIND"]:
+                env[k] = f"{root_binds},{env[k]}" if k in env else root_binds
+
         result = subprocess.run(cmd, env=env, check=False)
 
         if result.returncode != 0:
@@ -530,6 +583,12 @@ class FastSurferApp:
             help="Path to completion marker file to create",
         )
         parser.add_argument(
+            "--executable",
+            type=str,
+            default="run_fastsurfer.sh",
+            help="Executable or singularity wrapper for fastsurfer",
+        )
+        parser.add_argument(
             "--tmp-dir",
             type=Path,
             default=Path(".tmp"),
@@ -563,6 +622,7 @@ class FastSurferApp:
             fs_license=parsed.fs_license if parsed.fs_license else None,
             extra_args=parsed.extra_args,
             marker_path=parsed.marker,
+            executable=parsed.executable,
         )
 
 

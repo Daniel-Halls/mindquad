@@ -145,3 +145,7 @@ The pipeline will automatically pause, scan the generated BIDS directories for e
 Because Mindquad's dependencies are strictly defined, Snakemake inherently knows which steps can run simultaneously. Once the FastSurfer and BIDS steps complete, **fMRIPrep**, **QSIPrep**, and **MRS** are 100% independent. 
 
 If you supply enough cores (e.g., `mindquad -n 16`), or submit the pipeline to a SLURM cluster, Snakemake will automatically launch these three pipelines at the exact same time!
+
+## Workarounds
+
+Sometimes fMRIPrep doesn't download templateflow correctly leaving somefiles empty. 
