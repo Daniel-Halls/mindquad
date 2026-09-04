@@ -698,15 +698,18 @@ def get_tool_env_cmd(tool_name: str) -> str:
             
     if module_str:
         cleaned_str = module_str.strip()
-        if cleaned_str.startswith("module load ") or cleaned_str.startswith("source "):
+        if cleaned_str.startswith("source "):
             cmd_parts.append(f"{cleaned_str} 2>/dev/null || true")
         else:
-            cmd_parts.append(f"module load {cleaned_str} 2>/dev/null || true")
+            if cleaned_str.startswith("module load "):
+                cleaned_str = cleaned_str[len("module load "):].strip()
+            for m in cleaned_str.split():
+                cmd_parts.append(f"module load {m} 2>/dev/null || true")
         
     if not cmd_parts:
         return "true;"
         
-    return "; ".join(cmd_parts) + ";"
+    return "set +u; " + "; ".join(cmd_parts) + "; set -u;"
 
 def get_tool_executable(tool_name: str, default_bin: str) -> str:
     """Return the executable string, auto-wrapping in container engine if a .sif is provided,

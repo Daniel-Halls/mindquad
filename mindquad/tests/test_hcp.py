@@ -25,7 +25,13 @@ class BaseTest(unittest.TestCase):
     def setUpClass(cls) -> None:
         """Ensure project-local temporary folder exists."""
         cls.tmp_root = Path(".tmp")
-        cls.tmp_root.mkdir(parents=True, exist_ok=True)
+        try:
+            cls.tmp_root.mkdir(parents=True, exist_ok=True)
+            test_file = cls.tmp_root / ".test_write"
+            test_file.touch()
+            test_file.unlink()
+        except OSError:
+            cls.tmp_root = Path("/tmp")
 
     def create_temp_dir(self) -> tempfile.TemporaryDirectory:
         """Create temp directory inside project-local .tmp/."""
@@ -406,6 +412,8 @@ class TestHCPSymlinkManager(BaseTest):
             self.assertTrue((study_folder / "sub-01" / "T1w" / "sub-01").is_symlink())
             self.assertTrue((study_folder / "sub-01" / "T1w" / "T1w.nii.gz").is_symlink())
             self.assertTrue((study_folder / "sub-01" / "MNINonLinear" / "T1w_restore.nii.gz").is_symlink())
+            self.assertTrue((fs_dir / "mri" / "transforms" / "T2wtoT1w.mat").exists())
+            self.assertTrue((study_folder / "sub-01" / "T1w" / "sub-01" / "mri" / "transforms" / "T2wtoT1w.mat").exists())
 
 
 class TestHCPCommandBuilder(unittest.TestCase):
