@@ -21,6 +21,21 @@ from mindquad.workflow.scripts.mrs_helper import (
     MRSTissueSegmentationManager,
     MRSTissueType,
 )
+from mindquad.workflow.scripts.mrs_snr import (
+    append_combined_snr,
+    calculate_posthoc_glx_snr,
+    compute_combined_snr,
+    load_qc_data,
+    parse_args as parse_snr_args,
+    save_qc_data,
+)
+from mindquad.workflow.scripts.mrs import (
+    ensure_fslpython,
+    is_step_completed,
+    mark_step_completed,
+    parse_arguments as parse_mrs_arguments,
+    run_segmentation,
+)
 
 
 class BaseTest(unittest.TestCase):
@@ -568,6 +583,194 @@ class TestMRSApp(BaseTest):
             ])
             self.assertEqual(exit_code, 0)
             self.assertTrue(marker.exists())
+
+
+class TestMRSSNR(BaseTest):
+    """Test cases for posthoc metabolite SNR combination in mrs_snr.py."""
+
+    def test_load_qc_data_success(self) -> None:
+        """Test loading QC metrics table from directory."""
+        import pandas as pd
+        with self.create_temp_dir() as temp_dir:
+            fit_dir = Path(temp_dir)
+            qc_csv = fit_dir / "qc.csv"
+            df = pd.DataFrame(
+                {"SNR": [10.5, 5.2, 8.1], "FWHM": [0.05, 0.04, 0.06]},
+                index=["Glu", "Gln", "Cr"]
+            )
+            df.to_csv(qc_csv)
+
+            loaded = load_qc_data(fit_dir)
+            self.assertEqual(list(loaded.index), ["Glu", "Gln", "Cr"])
+            self.assertEqual(loaded.loc["Glu", "SNR"], 10.5)
+
+    def test_load_qc_data_not_found(self) -> None:
+        """Test FileNotFoundError when qc.csv is missing."""
+        with self.create_temp_dir() as temp_dir:
+            with self.assertRaises(FileNotFoundError):
+                load_qc_data(Path(temp_dir))
+
+    def test_compute_combined_snr_standard(self) -> None:
+        """Test root-sum-square calculation for Glu and Gln."""
+        import pandas as pd
+        df = pd.DataFrame(
+            {"SNR": [3.0, 4.0]},
+            index=["Glu", "Gln"]
+        )
+        combined = compute_combined_snr(df, ("Glu", "Gln"))
+        # sqrt(3^2 + 4^2) = 5.0
+        self.assertAlmostEqual(combined, 5.0)
+
+    def test_compute_combined_snr_missing_column(self) -> None:
+        """Test KeyError when 'SNR' column is not in DataFrame."""
+        import pandas as pd
+        df = pd.DataFrame(
+            {"FWHM": [0.05, 0.04]},
+            index=["Glu", "Gln"]
+        )
+        with self.assertRaises(KeyError):
+            compute_combined_snr(df)
+
+    def test_compute_combined_snr_missing_metabolite(self) -> None:
+        """Test ValueError when required metabolite is missing."""
+        import pandas as pd
+        df = pd.DataFrame(
+            {"SNR": [3.0]},
+            index=["Glu"]
+        )
+        with self.assertRaises(ValueError) as ctx:
+            compute_combined_snr(df, ("Glu", "Gln"))
+        self.assertIn("missing from QC index", str(ctx.exception))
+
+    def test_append_and_save_combined_snr(self) -> None:
+        """Test appending combined SNR row and saving back to disk."""
+        import pandas as pd
+        with self.create_temp_dir() as temp_dir:
+            fit_dir = Path(temp_dir)
+            df = pd.DataFrame(
+                {"SNR": [3.0, 4.0]},
+                index=["Glu", "Gln"]
+            )
+            df = append_combined_snr(df, 5.0, "Glx")
+            self.assertIn("Glx", df.index)
+            self.assertEqual(df.loc["Glx", "SNR"], 5.0)
+
+            saved_path = save_qc_data(df, fit_dir)
+            self.assertTrue(saved_path.is_file())
+            reloaded = pd.read_csv(saved_path, index_col=0)
+            self.assertEqual(reloaded.loc["Glx", "SNR"], 5.0)
+
+    def test_calculate_posthoc_glx_snr_end_to_end(self) -> None:
+        """Test end-to-end calculate_posthoc_glx_snr execution."""
+        import pandas as pd
+        with self.create_temp_dir() as temp_dir:
+            fit_dir = Path(temp_dir)
+            qc_csv = fit_dir / "qc.csv"
+            df = pd.DataFrame(
+                {"SNR": [6.0, 8.0]},
+                index=["Glu", "Gln"]
+            )
+            df.to_csv(qc_csv)
+
+            val = calculate_posthoc_glx_snr(fit_dir=fit_dir)
+            # sqrt(6^2 + 8^2) = 10.0
+            self.assertAlmostEqual(val, 10.0)
+            updated = pd.read_csv(qc_csv, index_col=0)
+            self.assertIn("Glx", updated.index)
+            self.assertAlmostEqual(updated.loc["Glx", "SNR"], 10.0)
+
+    def test_snr_parse_args(self) -> None:
+        """Test mrs_snr CLI argument parser."""
+        with patch("sys.argv", ["mrs_snr.py", "-f", "/path/to/fit"]):
+            args = parse_snr_args()
+            self.assertEqual(args.fit_dir, "/path/to/fit")
+
+
+class TestMRSPipeline(BaseTest):
+    """Test cases for mrs.py CLI parsing, execution, and utilities."""
+
+    def test_parse_arguments_pipeline_style(self) -> None:
+        """Test pipeline-style CLI argument parsing."""
+        args = parse_mrs_arguments([
+            "--data", "sub-01_svs.nii.gz",
+            "--output-dir", "derivatives/mrs/sub-01",
+            "--subject", "sub-01",
+            "--threads", "2",
+            "--fit-algo", "Newton",
+            "--ppm-min", "0.2",
+            "--ppm-max", "4.2",
+            "--baseline-order", "2",
+            "--internal-ref", "Cr",
+            "--reference", "ref.nii.gz",
+            "--t1", "T1w.nii.gz",
+            "--basis", "basis_dir",
+        ])
+        self.assertEqual(str(args.pfile), "sub-01_svs.nii.gz")
+        self.assertEqual(str(args.data), "sub-01_svs.nii.gz")
+        self.assertEqual(str(args.out_dir), "derivatives/mrs/sub-01")
+        self.assertEqual(args.region, "sub-01")
+        self.assertEqual(args.threads, 2)
+        self.assertEqual(args.fit_algo, "Newton")
+        self.assertEqual(args.ppm_min, 0.2)
+        self.assertEqual(args.ppm_max, 4.2)
+        self.assertEqual(args.baseline_order, 2)
+        self.assertEqual(args.internal_ref, "Cr")
+        self.assertEqual(str(args.ref_file), "ref.nii.gz")
+        self.assertEqual(str(args.t1_file), "T1w.nii.gz")
+        self.assertEqual(str(args.basis_dir), "basis_dir")
+
+    def test_parse_arguments_legacy_style(self) -> None:
+        """Test legacy-style (-p, -t, -o, -r, -b) argument parsing."""
+        args = parse_mrs_arguments([
+            "-p", "P00000.7",
+            "-t", "T1w.nii.gz",
+            "-o", "output_dir",
+            "-r", "PFC",
+            "-b", "basis_dir",
+            "--reference", "ref.nii.gz",
+        ])
+        self.assertEqual(str(args.pfile), "P00000.7")
+        self.assertEqual(str(args.t1_file), "T1w.nii.gz")
+        self.assertEqual(str(args.out_dir), "output_dir")
+        self.assertEqual(str(args.ref_file), "ref.nii.gz")
+        self.assertEqual(str(args.basis_dir), "basis_dir")
+        self.assertEqual(args.region, "PFC")
+
+    def test_ensure_fslpython_non_strict(self) -> None:
+        """Test ensure_fslpython does not raise in non-strict mode."""
+        try:
+            ensure_fslpython(strict=False)
+        except Exception as exc:
+            self.fail(f"ensure_fslpython(strict=False) raised unexpected exception: {exc}")
+
+    def test_step_completion_tracking(self) -> None:
+        """Test step completion marking and checking."""
+        with self.create_temp_dir() as temp_dir:
+            dir_path = Path(temp_dir)
+            self.assertFalse(is_step_completed(dir_path, "fitting"))
+            mark_step_completed(dir_path, "fitting", details="Completed")
+            self.assertTrue(is_step_completed(dir_path, "fitting"))
+            self.assertTrue((dir_path / ".fitting_completed").is_file())
+
+    def test_run_segmentation_fallback(self) -> None:
+        """Test segmentation fallback when anatomical scan is None."""
+        with self.create_temp_dir() as temp_dir:
+            temp_path = Path(temp_dir)
+            diff_file = temp_path / "diff.nii.gz"
+            diff_file.write_text("diff_mock", encoding="utf-8")
+            seg_dir = temp_path / "segmentation"
+
+            frac_json, mask_file = run_segmentation(
+                diff_nii=diff_file,
+                t1_path=None,
+                seg_dir=seg_dir,
+                region="sub-01",
+            )
+            self.assertTrue(frac_json.is_file())
+            self.assertTrue(mask_file.is_file())
+            data = json.loads(frac_json.read_text(encoding="utf-8"))
+            self.assertEqual(data["subject"], "sub-01")
+            self.assertIn("GM", data["tissue_fractions"])
 
 
 if __name__ == "__main__":

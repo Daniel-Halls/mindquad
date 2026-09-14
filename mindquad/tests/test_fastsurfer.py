@@ -166,6 +166,7 @@ class TestFastSurferCommandBuilder(unittest.TestCase):
             subject_id="sub-19081001",
         )
         expected_cmd = [
+            "bash",
             "run_fastsurfer.sh",
             "--t1",
             "bids/sub-19081001/anat/sub-19081001_T1w.nii.gz",
@@ -177,6 +178,7 @@ class TestFastSurferCommandBuilder(unittest.TestCase):
             "2",
             "--device",
             "cpu",
+            "--fsaparc",
         ]
         self.assertEqual(cmd, expected_cmd)
 
@@ -198,6 +200,7 @@ class TestFastSurferCommandBuilder(unittest.TestCase):
             subject_id="sub-01",
         )
         expected_cmd = [
+            "bash",
             "run_fastsurfer.sh",
             "--t1",
             "bids/sub-01/anat/sub-01_T1w.nii.gz",
@@ -214,6 +217,7 @@ class TestFastSurferCommandBuilder(unittest.TestCase):
             "--fs_license",
             "/path/to/license.txt",
             "--surf_only",
+            "--fsaparc",
             "--parallel",
             "--qc_snap",
             "--vol_segstats",

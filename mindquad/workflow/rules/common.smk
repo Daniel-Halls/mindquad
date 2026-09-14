@@ -600,6 +600,12 @@ def get_mrs_svs_image(wildcards: Any) -> str:
             "*svs*.nii",
             "*mrs*.nii.gz",
             "*mrs*.nii",
+            "*.7",
+            "*P*.7",
+            "*pfile*",
+            "*.dat",
+            "*.spar",
+            "*.rda",
         ]:
             matches = sorted(mrs_dir.glob(pattern))
             if matches:
@@ -630,8 +636,11 @@ def get_mrs_water_ref_image(wildcards: Any) -> str:
             "*ref*.nii.gz",
             "*ref*.nii",
             "*water*.nii.gz",
+            "*water*.nii",
             "*wref*.nii.gz",
+            "*wref*.nii",
             "*h2o*.nii.gz",
+            "*h2o*.nii",
         ]:
             matches = sorted(mrs_dir.glob(pattern))
             if matches:
