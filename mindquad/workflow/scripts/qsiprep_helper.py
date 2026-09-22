@@ -8,7 +8,7 @@ import subprocess
 import sys
 from enum import Enum
 from pathlib import Path
-from typing import Any, ClassVar, Dict, List, Optional, Union
+from typing import Any, ClassVar, Dict, List, Optional
 
 
 class QSIPrepDenoiseMethod(Enum):
@@ -262,7 +262,7 @@ class QSIPrepConfig:
         Raises:
             ValueError: If resource limits or configuration values are invalid.
         """
-        if False: # self._threads > 2:
+        if False:  # self._threads > 2:
             raise ValueError(
                 f"Resource constraint violation: threads ({self._threads}) "
                 "must be <= 2."
@@ -527,6 +527,50 @@ class QSIPrepRunner:
         """Initialize QSIPrepRunner with logger."""
         self._logger = logging.getLogger(self.__class__.__name__)
 
+    def setup_eddy_shims(self, target_dir: Path) -> Path:
+        """Create shim wrappers for eddy_cuda versions for available binaries.
+
+        QSIPrep with use_cuda hardcodes ExtendedEddy to look specifically for
+        'eddy_cuda10.2', but modern containers provide 'eddy_cuda11.0' or
+        'eddy_cuda'. This helper ensures expected eddy binary names resolve.
+
+        Args:
+            target_dir: Directory where shim executables should be placed.
+
+        Returns:
+            Path to directory containing eddy shims.
+        """
+        eddy_bin_dir = target_dir / "eddy_shims"
+        eddy_bin_dir.mkdir(parents=True, exist_ok=True)
+
+        shim_script_content = (
+            "#!/bin/bash\n"
+            "for candidate in "
+            "eddy_cuda11.0 eddy_cuda10.2 eddy_cuda10.0 eddy_cuda9.1 "
+            "eddy_cuda eddy_openmp eddy_cpu eddy; do\n"
+            '    target_bin=$(type -P "$candidate" 2>/dev/null)\n'
+            '    if [ -n "$target_bin" ] && [ "$target_bin" != "$0" ]; then\n'
+            '        exec "$target_bin" "$@"\n'
+            "    fi\n"
+            "done\n"
+            'echo "Error: No suitable eddy executable found in PATH" >&2\n'
+            "exit 127\n"
+        )
+
+        shim_names = [
+            "eddy_cuda10.2",
+            "eddy_cuda10.0",
+            "eddy_cuda9.1",
+            "eddy_cuda8.0",
+            "eddy_cuda",
+        ]
+        for shim_name in shim_names:
+            shim_path = eddy_bin_dir / shim_name
+            shim_path.write_text(shim_script_content, encoding="utf-8")
+            shim_path.chmod(0o755)
+
+        return eddy_bin_dir
+
     def prepare_environment(
         self,
         tmp_dir: Path,
@@ -551,19 +595,30 @@ class QSIPrepRunner:
         env["MKL_NUM_THREADS"] = str(threads)
         if fs_license and fs_license.strip():
             env["FS_LICENSE"] = str(fs_license).strip()
-            
+
+        eddy_shims_dir = self.setup_eddy_shims(tmp_dir)
+        env["PATH"] = f"{eddy_shims_dir}:{env.get('PATH', '')}".rstrip(":")
+        singularity_env_path = env.get("SINGULARITYENV_PREPEND_PATH", "")
+        env["SINGULARITYENV_PREPEND_PATH"] = (
+            f"{eddy_shims_dir}:{singularity_env_path}".rstrip(":")
+        )
+        apptainer_env_path = env.get("APPTAINERENV_PREPEND_PATH", "")
+        env["APPTAINERENV_PREPEND_PATH"] = (
+            f"{eddy_shims_dir}:{apptainer_env_path}".rstrip(":")
+        )
+
         # Ensure Singularity/Apptainer mounts host directories
         bind_paths = f"{tmp_dir}:/tmp,{tmp_dir}:/var/tmp"
         if "SINGULARITY_BIND" in env:
             env["SINGULARITY_BIND"] += f",{bind_paths}"
         else:
             env["SINGULARITY_BIND"] = bind_paths
-            
+
         if "APPTAINER_BIND" in env:
             env["APPTAINER_BIND"] += f",{bind_paths}"
         else:
             env["APPTAINER_BIND"] = bind_paths
-            
+
         return env
 
     def ensure_report_file(
@@ -678,22 +733,38 @@ class QSIPrepRunner:
         env = self.prepare_environment(tmp_dir, threads, fs_license)
 
         self._logger.info("Executing QSIPrep command: %s", " ".join(cmd))
-        # Dynamically inject root mounts for wrapper-based singularity containers
-        def get_root_mount(path: str) -> str:
-            p = Path(path).resolve()
-            return f"/{p.parts[1]}" if len(p.parts) > 1 else ""
-            
-        roots = set()
-        for p in [bids_dir, output_dir, work_dir, fs_license, eddy_config]:
-            if p:
-                r = get_root_mount(str(p))
-                if r:
-                    roots.add(f"{r}:{r}")
-                    
-        if roots:
-            root_binds = ",".join(roots)
-            for k in ["SINGULARITY_BIND", "APPTAINER_BIND"]:
-                env[k] = f"{root_binds},{env[k]}" if k in env else root_binds
+
+        # Dynamically inject root mounts for container execution
+        def get_root_mount(mount_target: str) -> str:
+            resolved_path = Path(mount_target).resolve()
+            if len(resolved_path.parts) > 1:
+                return f"/{resolved_path.parts[1]}"
+            return ""
+
+        root_mounts = set()
+        candidate_paths = [
+            bids_dir,
+            output_dir,
+            work_dir,
+            tmp_dir,
+            tmp_dir / "eddy_shims",
+            fs_license,
+            eddy_config,
+        ]
+        for candidate_path in candidate_paths:
+            if candidate_path:
+                root_prefix = get_root_mount(str(candidate_path))
+                if root_prefix:
+                    root_mounts.add(f"{root_prefix}:{root_prefix}")
+
+        if root_mounts:
+            root_bind_string = ",".join(sorted(root_mounts))
+            for env_var_name in ["SINGULARITY_BIND", "APPTAINER_BIND"]:
+                if env_var_name in env:
+                    current_bind = env[env_var_name]
+                    env[env_var_name] = f"{root_bind_string},{current_bind}"
+                else:
+                    env[env_var_name] = root_bind_string
 
         result = subprocess.run(cmd, env=env, check=False)
 

@@ -1,5 +1,6 @@
 """Unit tests for QSIPrep helper classes and configuration."""
 
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -495,6 +496,20 @@ class TestQSIPrepRunner(BaseTest):
             self.assertEqual(env.get("OPENBLAS_NUM_THREADS"), "2")
             self.assertEqual(env.get("MKL_NUM_THREADS"), "2")
             self.assertEqual(env.get("FS_LICENSE"), "/license/fs.txt")
+            singularity_path = env.get("SINGULARITYENV_PREPEND_PATH", "")
+            self.assertIn("eddy_shims", singularity_path)
+            apptainer_path = env.get("APPTAINERENV_PREPEND_PATH", "")
+            self.assertIn("eddy_shims", apptainer_path)
+
+    def test_setup_eddy_shims(self) -> None:
+        """Test creation and executability of eddy shim wrappers."""
+        with self.create_temp_dir() as temp_dir:
+            tmp_path = Path(temp_dir)
+            shims_dir = self.runner.setup_eddy_shims(tmp_path)
+            self.assertTrue(shims_dir.is_dir())
+            eddy_shim = shims_dir / "eddy_cuda10.2"
+            self.assertTrue(eddy_shim.is_file())
+            self.assertTrue(os.access(eddy_shim, os.X_OK))
 
     def test_ensure_report_file_existing_copy(self) -> None:
         """Test copying found report to target report path."""

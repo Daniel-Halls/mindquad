@@ -178,7 +178,15 @@ def get_fastsurfer_device() -> str:
 
 def get_fastsurfer_license() -> str:
     """Return configured FreeSurfer license file path if provided."""
-    return str(config.get("fastsurfer", {}).get("fs_license", ""))
+    configured_license = config.get("fastsurfer", {}).get("fs_license")
+    if not configured_license:
+        configured_license = (
+            config.get("fs_license")
+            or config.get("fmriprep", {}).get("fs_license")
+            or config.get("qsiprep", {}).get("fs_license")
+            or ""
+        )
+    return str(configured_license)
 
 
 def get_fastsurfer_extra_args() -> str:
@@ -670,57 +678,82 @@ def get_tool_env_cmd(tool_name: str) -> str:
     """Return environment preparation command (e.g., module load) for a tool."""
     tool_cfg = config.get(tool_name, {})
     load_val = tool_cfg.get("load") or tool_cfg.get("module")
-    
+
     module_str, sif_path = _extract_load_components(load_val)
-    
+
     cmd_parts = []
-    
+
     if sif_path and sif_path.endswith(".sif"):
         container_load = config.get("container", {}).get("load")
         if container_load:
-            cmd_parts.append(f"module load {container_load} 2>/dev/null || true")
-            
+            cmd_parts.append(
+                f"module load {container_load} 2>/dev/null || true"
+            )
+
     if module_str:
         cleaned_str = module_str.strip()
-        if cleaned_str.startswith("source "):
-            cmd_parts.append(f"{cleaned_str} 2>/dev/null || true")
-        else:
-            if cleaned_str.startswith("module load "):
-                cleaned_str = cleaned_str[len("module load "):].strip()
-            for module_item in cleaned_str.split():
-                cmd_parts.append(f"module load {module_item} 2>/dev/null || true")
-        
+        # Handle multiple statements separated by ';'
+        statement_items = [
+            chunk.strip()
+            for chunk in cleaned_str.split(";")
+            if chunk.strip()
+        ]
+        for statement in statement_items:
+            if statement.startswith("source "):
+                cmd_parts.append(f"{statement} 2>/dev/null || true")
+            elif "||" in statement or ">" in statement:
+                cmd_parts.append(f"{statement} 2>/dev/null || true")
+            elif statement.startswith("module load "):
+                modules = statement[len("module load "):].strip().split()
+                for mod_name in modules:
+                    cmd_parts.append(
+                        f"module load {mod_name} 2>/dev/null || true"
+                    )
+            else:
+                for mod_name in statement.split():
+                    cmd_parts.append(
+                        f"module load {mod_name} 2>/dev/null || true"
+                    )
+
     if not cmd_parts:
         return "true;"
-        
+
     return "set +u; " + "; ".join(cmd_parts) + "; set -u;"
+
 
 def get_tool_executable(tool_name: str, default_bin: str) -> str:
     """Return the executable string, auto-wrapping in container engine if a .sif is provided,
     or returning custom script/executable if configured."""
     tool_cfg = config.get(tool_name, {})
-    custom_exe = tool_cfg.get("executable") or tool_cfg.get("script") or tool_cfg.get("bin")
+    custom_exe = (
+        tool_cfg.get("executable")
+        or tool_cfg.get("script")
+        or tool_cfg.get("bin")
+    )
     if custom_exe:
         return str(custom_exe)
 
     load_val = tool_cfg.get("load") or tool_cfg.get("sif")
     _, target_path = _extract_load_components(load_val)
-    
+
     if target_path:
         if target_path.endswith(".sif"):
-            engine_cmd = config.get("container", {}).get("command", "singularity")
+            engine_cmd = config.get("container", {}).get(
+                "command", "singularity"
+            )
             out_dir = Path(get_output_dir()).resolve()
             bids_dir = Path(get_bids_dir()).resolve()
-            
+
             mount_paths = [str(out_dir), str(bids_dir)]
             if tool_name == "qsiprep":
                 mount_paths.append(get_qsiprep_eddy_config())
-                
+                mount_paths.append(str(Path(get_tmp_dir()).resolve()))
+
             binds = get_root_mounts(*mount_paths)
             bind_arg = f"-B {binds}" if binds else ""
             nv_arg = " --nv" if tool_name == "qsiprep" else ""
             return f"{engine_cmd} run --cleanenv{nv_arg} {bind_arg} {target_path}"
         elif target_path.endswith(".sh") or Path(target_path).is_file():
             return target_path
-            
+
     return default_bin
