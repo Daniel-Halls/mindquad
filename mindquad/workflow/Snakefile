@@ -19,60 +19,94 @@ include: "rules/mrs.smk"
 
 
 def get_dynamic_targets(wildcards):
+    """Dynamically determine required terminal targets based on BIDS contents."""
     targets = []
-    
-    desc_file = Path(get_bids_dir()) / "dataset_description.json"
-    if not desc_file.is_file():
+
+    description_file = Path(get_bids_dir()) / "dataset_description.json"
+    if not description_file.is_file():
         targets.append(f"{get_bids_dir()}/dataset_description.json")
-    
-    for subject in get_bids_subjects():
+
+    for subject_label in get_bids_subjects():
         # Evaluate checkpoint: forces Snakemake to wait for organize_bids_subject to finish
-        checkpoints.organize_bids_subject.get(subject=subject)
-        
-        bids_dir = Path(get_bids_dir()) / f"sub-{subject}"
-        
-        has_anat = (bids_dir / "anat").exists() or any(bids_dir.glob("ses-*/anat"))
-        has_func = (bids_dir / "func").exists() or any(bids_dir.glob("ses-*/func"))
-        has_dwi = (bids_dir / "dwi").exists() or any(bids_dir.glob("ses-*/dwi"))
-        has_mrs = (bids_dir / "mrs").exists() or any(bids_dir.glob("ses-*/mrs"))
-        
+        checkpoints.organize_bids_subject.get(subject=subject_label)
+
+        subject_bids_dir = Path(get_bids_dir()) / f"sub-{subject_label}"
+
+        has_anat = (subject_bids_dir / "anat").exists() or any(
+            subject_bids_dir.glob("ses-*/anat")
+        )
+        has_func = (subject_bids_dir / "func").exists() or any(
+            subject_bids_dir.glob("ses-*/func")
+        )
+        has_dwi = (subject_bids_dir / "dwi").exists() or any(
+            subject_bids_dir.glob("ses-*/dwi")
+        )
+        has_mrs = (subject_bids_dir / "mrs").exists() or any(
+            subject_bids_dir.glob("ses-*/mrs")
+        )
+
         has_t2w = False
         has_flair = False
-        anat_dirs = [bids_dir / "anat"] + sorted(bids_dir.glob("ses-*/anat"))
-        for a_dir in anat_dirs:
-            if a_dir.exists():
-                anat_files = [f.name.lower() for f in a_dir.iterdir() if f.is_file()]
-                has_t2w = any("t2w" in f for f in anat_files) or has_t2w
-                has_flair = any("flair" in f for f in anat_files) or has_flair
+        anat_directories = [subject_bids_dir / "anat"] + sorted(
+            subject_bids_dir.glob("ses-*/anat")
+        )
+        for anat_directory in anat_directories:
+            if anat_directory.exists():
+                anat_file_names = [
+                    file_entry.name.lower()
+                    for file_entry in anat_directory.iterdir()
+                    if file_entry.is_file()
+                ]
+                has_t2w = (
+                    any("t2w" in file_name for file_name in anat_file_names)
+                    or has_t2w
+                )
+                has_flair = (
+                    any("flair" in file_name for file_name in anat_file_names)
+                    or has_flair
+                )
 
-        # Only append the terminal leaf nodes for this subject
-        
-        # If they have functional data, fMRIPrep is the leaf.
+        # FastSurfer structural processing runs whenever anatomical data exists
+        if has_anat:
+            targets.append(
+                f"{get_fastsurfer_dir()}/sub-{subject_label}/.fastsurfer_complete"
+            )
+            targets.append(
+                f"{get_fastsurfer_dir()}/sub-{subject_label}/mri/aparc.DKTatlas+aseg.deep.mgz"
+            )
+
+        # If subject has functional data, fMRIPrep runs (integrates FastSurfer outputs)
         if has_func and has_anat:
-            targets.append(f"{get_fmriprep_dir()}/sub-{subject}/.fmriprep_complete")
-            targets.append(f"{get_fmriprep_dir()}/sub-{subject}.html")
-            
-        # If they have DWI data, QSIPrep is the leaf.
-        if has_dwi and has_anat:
-            targets.append(f"{get_qsiprep_dir()}/sub-{subject}/.qsiprep_complete")
-            targets.append(f"{get_qsiprep_dir()}/sub-{subject}.html")
-            
-        # If they have T2w or FLAIR data, HCP is the leaf.
-        if has_t2w or has_flair:
-            targets.append(f"{get_hcp_dir()}/sub-{subject}/.hcp_complete")
-            targets.append(f"{get_hcp_dir()}/sub-{subject}/MNINonLinear/fsaverage_LR32k/sub-{subject}.32k_fs_LR.wb.spec")
-            
-        # If they have MRS data, MRS is the leaf.
-        if has_mrs and has_anat:
-            targets.append(f"{get_mrs_dir()}/sub-{subject}/.mrs_complete")
-            targets.append(f"{get_mrs_dir()}/sub-{subject}.html")
-            targets.append(f"{get_mrs_dir()}/sub-{subject}/quantities.csv")
+            targets.append(
+                f"{get_fmriprep_dir()}/sub-{subject_label}/.fmriprep_complete"
+            )
+            targets.append(f"{get_fmriprep_dir()}/sub-{subject_label}.html")
 
-        # If they ONLY have T1w and no other modalities, FastSurfer is the leaf.
-        if has_anat and not (has_func or has_dwi or has_t2w or has_flair or has_mrs):
-            targets.append(f"{get_fastsurfer_dir()}/sub-{subject}/.fastsurfer_complete")
-            targets.append(f"{get_fastsurfer_dir()}/sub-{subject}/mri/aparc.DKTatlas+aseg.deep.mgz")
-            
+        # If subject has DWI data, QSIPrep runs in parallel with FastSurfer
+        if has_dwi and has_anat:
+            targets.append(
+                f"{get_qsiprep_dir()}/sub-{subject_label}/.qsiprep_complete"
+            )
+            targets.append(f"{get_qsiprep_dir()}/sub-{subject_label}.html")
+
+        # If subject has T2w or FLAIR data, HCP PostFreeSurfer runs
+        if (has_t2w or has_flair) and has_anat:
+            targets.append(
+                f"{get_hcp_dir()}/sub-{subject_label}/.hcp_complete"
+            )
+            targets.append(
+                f"{get_hcp_dir()}/sub-{subject_label}/MNINonLinear/fsaverage_LR32k/"
+                f"sub-{subject_label}.32k_fs_LR.wb.spec"
+            )
+
+        # If subject has MRS data, MRS processing runs in parallel with FastSurfer
+        if has_mrs and has_anat:
+            targets.append(
+                f"{get_mrs_dir()}/sub-{subject_label}/.mrs_complete"
+            )
+            targets.append(f"{get_mrs_dir()}/sub-{subject_label}.html")
+            targets.append(f"{get_mrs_dir()}/sub-{subject_label}/quantities.csv")
+
     return targets
 
 

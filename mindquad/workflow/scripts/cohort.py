@@ -1,11 +1,11 @@
 """Study cohort and dataset format resolution module."""
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 
 class StudyCohort:
-    """Cohort manager to discover and resolve subjects and BIDS status in study."""
+    """Cohort manager to discover subjects and BIDS status in study."""
 
     def __init__(self, pipeline_config: Dict[str, Any]) -> None:
         """Initialize StudyCohort with workflow configuration dictionary.
@@ -23,10 +23,10 @@ class StudyCohort:
     @property
     def is_bids(self) -> bool:
         """Check whether raw_data_dir is already a BIDS formatted dataset."""
-        for key in ("is_bids", "raw_is_bids", "bids_format"):
-            val = self._config.get(key)
-            if val is not None:
-                return bool(val)
+        for config_key in ("is_bids", "raw_is_bids", "bids_format"):
+            config_val = self._config.get(config_key)
+            if config_val is not None:
+                return bool(config_val)
 
         if not self.raw_data_dir.exists() or not self.raw_data_dir.is_dir():
             return False
@@ -37,8 +37,9 @@ class StudyCohort:
 
         # 2. Check for sub-* directories containing BIDS modalities
         sub_dirs = [
-            p for p in self.raw_data_dir.iterdir()
-            if p.is_dir() and p.name.startswith("sub-")
+            path_entry
+            for path_entry in self.raw_data_dir.iterdir()
+            if path_entry.is_dir() and path_entry.name.startswith("sub-")
         ]
         if sub_dirs:
             bids_modalities = {
@@ -53,14 +54,23 @@ class StudyCohort:
                 "ieeg",
                 "beh",
             }
-            for s in sub_dirs:
-                if any((s / mod).is_dir() for mod in bids_modalities):
+            for subject_dir in sub_dirs:
+                if any(
+                    (subject_dir / modality_name).is_dir()
+                    for modality_name in bids_modalities
+                ):
                     return True
                 # Also check ses-*/modality
                 if any(
-                    any((ses / mod).is_dir() for mod in bids_modalities)
-                    for ses in s.iterdir()
-                    if ses.is_dir() and ses.name.startswith("ses-")
+                    any(
+                        (session_dir / modality_name).is_dir()
+                        for modality_name in bids_modalities
+                    )
+                    for session_dir in subject_dir.iterdir()
+                    if (
+                        session_dir.is_dir()
+                        and session_dir.name.startswith("ses-")
+                    )
                 ):
                     return True
 
@@ -75,23 +85,29 @@ class StudyCohort:
         """
         configured_subjects = self._config.get("subjects")
         if configured_subjects:
-            return [str(s) for s in configured_subjects]
+            return [str(subject_item) for subject_item in configured_subjects]
 
         if self.raw_data_dir.exists():
             if self.is_bids:
-                found = [
-                    p.name
-                    for p in self.raw_data_dir.iterdir()
-                    if p.is_dir() and p.name.startswith("sub-")
+                found_dirs = [
+                    dir_entry.name
+                    for dir_entry in self.raw_data_dir.iterdir()
+                    if (
+                        dir_entry.is_dir()
+                        and dir_entry.name.startswith("sub-")
+                    )
                 ]
             else:
-                found = [
-                    p.name
-                    for p in self.raw_data_dir.iterdir()
-                    if p.is_dir() and not p.name.startswith(".")
+                found_dirs = [
+                    dir_entry.name
+                    for dir_entry in self.raw_data_dir.iterdir()
+                    if (
+                        dir_entry.is_dir()
+                        and not dir_entry.name.startswith(".")
+                    )
                 ]
-            if found:
-                return sorted(found)
+            if found_dirs:
+                return sorted(found_dirs)
         raise FileNotFoundError(f"No subjects found in {self.raw_data_dir}")
 
     def get_bids_subject_label(self, raw_subject: str) -> str:
@@ -120,4 +136,7 @@ class StudyCohort:
         Returns:
             List of sanitized BIDS subject identifiers.
         """
-        return [self.get_bids_subject_label(s) for s in self.subjects]
+        return [
+            self.get_bids_subject_label(subject_name)
+            for subject_name in self.subjects
+        ]

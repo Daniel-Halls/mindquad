@@ -5,13 +5,10 @@ from pathlib import Path
 
 
 rule qsiprep_participant:
-    """Run QSIPrep diffusion MRI preprocessing integrating FastSurfer outputs."""
+    """Run QSIPrep diffusion MRI preprocessing in parallel with FastSurfer."""
     input:
         bids_dataset=get_bids_dir() + "/dataset_description.json",
         bids_marker=get_bids_dir() + "/sub-{subject}/.bids_organized",
-        fastsurfer_marker=(
-            get_fastsurfer_dir() + "/sub-{subject}/.fastsurfer_complete"
-        ),
     output:
         marker=get_qsiprep_dir() + "/sub-{subject}/.qsiprep_complete",
         report=get_qsiprep_dir() + "/sub-{subject}.html",
