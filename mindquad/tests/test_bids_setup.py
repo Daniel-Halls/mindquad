@@ -13,6 +13,7 @@ from mindquad.workflow.scripts.bids_organizer import (
     DICOMSeriesClassifier,
     ScanClassification,
 )
+from mindquad.workflow.scripts.cohort import StudyCohort
 
 
 class TestBIDSMetadata(unittest.TestCase):
@@ -265,6 +266,89 @@ class TestBIDSOrganizer(BaseBIDSTest):
             self.assertTrue(run1_json.exists(), "Run 1 JSON must exist")
             self.assertTrue(run2_nii.exists(), "Run 2 NIfTI must exist")
             self.assertTrue(run2_json.exists(), "Run 2 JSON must exist")
+
+
+class TestStudyCohort(BaseBIDSTest):
+    """Test cases for StudyCohort BIDS detection and subject resolution."""
+
+    def test_detect_bids_from_dataset_description(self) -> None:
+        """Test BIDS detection when dataset_description.json is present."""
+        with self.create_temp_dir() as temp_dir:
+            raw_dir = Path(temp_dir) / "bids_data"
+            raw_dir.mkdir()
+            (raw_dir / "dataset_description.json").write_text("{}", encoding="utf-8")
+            (raw_dir / "sub-01").mkdir()
+
+            cohort = StudyCohort({"raw_data_dir": str(raw_dir)})
+            self.assertTrue(cohort.is_bids)
+
+    def test_detect_bids_from_modalities(self) -> None:
+        """Test BIDS detection when modality subdirectories exist."""
+        with self.create_temp_dir() as temp_dir:
+            raw_dir = Path(temp_dir) / "bids_data"
+            sub_dir = raw_dir / "sub-01"
+            (sub_dir / "anat").mkdir(parents=True)
+
+            cohort = StudyCohort({"raw_data_dir": str(raw_dir)})
+            self.assertTrue(cohort.is_bids)
+
+    def test_detect_bids_with_sessions(self) -> None:
+        """Test BIDS detection with session subdirectories."""
+        with self.create_temp_dir() as temp_dir:
+            raw_dir = Path(temp_dir) / "bids_data"
+            (raw_dir / "sub-01" / "ses-1" / "func").mkdir(parents=True)
+
+            cohort = StudyCohort({"raw_data_dir": str(raw_dir)})
+            self.assertTrue(cohort.is_bids)
+
+    def test_detect_raw_dicom_not_bids(self) -> None:
+        """Test non-BIDS raw DICOM folder returns is_bids=False."""
+        with self.create_temp_dir() as temp_dir:
+            raw_dir = Path(temp_dir) / "raw_dicoms"
+            (raw_dir / "patient_A" / "series_1").mkdir(parents=True)
+
+            cohort = StudyCohort({"raw_data_dir": str(raw_dir)})
+            self.assertFalse(cohort.is_bids)
+
+    def test_explicit_is_bids_config_override(self) -> None:
+        """Test explicit is_bids configuration overrides auto-detection."""
+        with self.create_temp_dir() as temp_dir:
+            raw_dir = Path(temp_dir) / "raw_data"
+            raw_dir.mkdir()
+
+            cohort_true = StudyCohort({"raw_data_dir": str(raw_dir), "is_bids": True})
+            self.assertTrue(cohort_true.is_bids)
+
+            (raw_dir / "dataset_description.json").write_text("{}", encoding="utf-8")
+            cohort_false = StudyCohort({"raw_data_dir": str(raw_dir), "is_bids": False})
+            self.assertFalse(cohort_false.is_bids)
+
+    def test_subjects_discovery_bids_filters_non_subjects(self) -> None:
+        """Test subjects discovery in BIDS mode only includes sub-* directories."""
+        with self.create_temp_dir() as temp_dir:
+            raw_dir = Path(temp_dir) / "bids_dataset"
+            (raw_dir / "sub-01" / "anat").mkdir(parents=True)
+            (raw_dir / "sub-02" / "anat").mkdir(parents=True)
+            (raw_dir / "derivatives").mkdir()
+            (raw_dir / "code").mkdir()
+            (raw_dir / "dataset_description.json").write_text("{}", encoding="utf-8")
+
+            cohort = StudyCohort({"raw_data_dir": str(raw_dir)})
+            self.assertEqual(cohort.subjects, ["sub-01", "sub-02"])
+            self.assertEqual(cohort.bids_subjects, ["01", "02"])
+
+    def test_get_bids_subject_label_strips_sub_prefix(self) -> None:
+        """Test stripping sub- prefix from subject directory names."""
+        cohort = StudyCohort({})
+        self.assertEqual(cohort.get_bids_subject_label("sub-1"), "1")
+        self.assertEqual(cohort.get_bids_subject_label("sub-01"), "01")
+        self.assertEqual(cohort.get_bids_subject_label("1"), "1")
+        self.assertEqual(cohort.get_bids_subject_label("sub-control_01"), "control01")
+
+    def test_get_bids_subject_label_with_custom_mapping(self) -> None:
+        """Test subject mapping respects configured dictionary and strips sub-."""
+        cohort = StudyCohort({"subject_mapping": {"raw_sub": "sub-10"}})
+        self.assertEqual(cohort.get_bids_subject_label("raw_sub"), "10")
 
 
 if __name__ == "__main__":

@@ -7,10 +7,16 @@
 # (Optional) Global output directory for bids, work, and derivatives. (Default: ".")
 output_dir: "."
 # ---------------------------------------------------------
-# (Mandatory) Absolute path to the raw DICOM data folder
+# (Mandatory) Absolute path to the raw DICOM data folder or pre-existing BIDS dataset
 raw_data_dir: "/path/to/your/raw/dataset"
 
+# (Optional) Explicitly declare whether raw_data_dir is already in BIDS format.
+# If omitted, Mindquad will auto-detect BIDS format (e.g., presence of dataset_description.json
+# or sub-*/ folders). When True, dcm2niix conversion is automatically skipped.
+# is_bids: false
+
 # (Optional) Subdirectories to generate. (Defaults: bids, work, .tmp, derivatives)
+# Note: If raw_data_dir is already in BIDS format, bids_dir defaults directly to raw_data_dir.
 bids_dir: "bids"
 work_dir: "work"
 tmp_dir: ".tmp"

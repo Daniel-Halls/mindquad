@@ -1,68 +1,26 @@
 """Common helper functions and configuration parsing for Mindquad pipeline."""
 
+import sys
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
+scripts_dir = Path(workflow.basedir) / "scripts"
+if str(scripts_dir) not in sys.path:
+    sys.path.insert(0, str(scripts_dir))
+root_dir = Path(workflow.basedir).parent.parent
+if str(root_dir) not in sys.path:
+    sys.path.insert(0, str(root_dir))
 
-class StudyCohort:
-    """Cohort manager to discover and resolve subjects in study."""
+try:
+    from mindquad.workflow.scripts.cohort import StudyCohort
+except ImportError:
+    from cohort import StudyCohort
 
-    def __init__(self, pipeline_config: Dict[str, Any]) -> None:
-        """Initialize StudyCohort with workflow configuration dictionary.
 
-        Args:
-            pipeline_config: Dictionary containing pipeline configuration.
-        """
-        self._config = pipeline_config
-
-    @property
-    def raw_data_dir(self) -> Path:
-        """Return the raw data directory path."""
-        return Path(str(self._config.get("raw_data_dir")))
-
-    @property
-    def subjects(self) -> List[str]:
-        """Retrieve list of subject folder names from config or filesystem.
-
-        Returns:
-            List of raw subject directory identifiers.
-        """
-        configured_subjects = self._config.get("subjects")
-        if configured_subjects:
-            return [str(s) for s in configured_subjects]
-
-        if self.raw_data_dir.exists():
-            found = [
-                p.name
-                for p in self.raw_data_dir.iterdir()
-                if p.is_dir() and not p.name.startswith(".")
-            ]
-            if found:
-                return sorted(found)
-        raise FileNotFoundError(f"No subjects found in {self.raw_data_dir}")
-
-    def get_bids_subject_label(self, raw_subject: str) -> str:
-        """Map raw subject directory name to sanitized BIDS subject label.
-
-        Args:
-            raw_subject: Raw subject directory name.
-
-        Returns:
-            Sanitized BIDS subject label (without 'sub-' prefix).
-        """
-        mapping: Dict[str, Any] = self._config.get("subject_mapping", {})
-        mapped = mapping.get(raw_subject, raw_subject)
-        clean_label = str(mapped).replace("-", "").replace("_", "")
-        return clean_label
-
-    @property
-    def bids_subjects(self) -> List[str]:
-        """Return list of all BIDS subject labels (without sub- prefix).
-
-        Returns:
-            List of sanitized BIDS subject identifiers.
-        """
-        return [self.get_bids_subject_label(s) for s in self.subjects]
+def is_raw_data_bids() -> bool:
+    """Return True if raw_data_dir is already in BIDS format."""
+    cohort = StudyCohort(config)
+    return cohort.is_bids
 
 
 def get_raw_data_dir() -> str:
@@ -83,7 +41,18 @@ def get_scripts_dir() -> str:
 
 def get_bids_dir() -> str:
     """Return the BIDS dataset root directory from configuration."""
-    return str(Path(get_output_dir()) / config.get("bids_dir", "bids"))
+    cohort = StudyCohort(config)
+    if cohort.is_bids:
+        bids_cfg = config.get("bids_dir")
+        if not bids_cfg or bids_cfg == "bids":
+            return str(cohort.raw_data_dir.resolve())
+        bids_path = Path(bids_cfg)
+        if not bids_path.is_absolute():
+            bids_path = Path(get_output_dir()) / bids_path
+        if bids_path.resolve() == cohort.raw_data_dir.resolve() or bids_path.exists():
+            return str(bids_path.resolve())
+        return str(cohort.raw_data_dir.resolve())
+    return str((Path(get_output_dir()) / config.get("bids_dir", "bids")).resolve())
 
 
 def get_derivatives_dir() -> str:
@@ -178,10 +147,16 @@ def get_raw_subject_dir(wildcards: Any) -> str:
     subject_wildcard = wildcards.subject
     mapping: Dict[str, Any] = config.get("subject_mapping", {})
     reverse_mapping = {
-        cohort.get_bids_subject_label(k): k for k in mapping.keys()
+        cohort.get_bids_subject_label(s): s for s in cohort.subjects
     }
+    for k, v in mapping.items():
+        reverse_mapping[cohort.get_bids_subject_label(k)] = k
+
     raw_name = reverse_mapping.get(subject_wildcard, subject_wildcard)
-    return str(cohort.raw_data_dir / raw_name)
+    candidate = cohort.raw_data_dir / raw_name
+    if not candidate.exists() and (cohort.raw_data_dir / f"sub-{raw_name}").exists():
+        return str(cohort.raw_data_dir / f"sub-{raw_name}")
+    return str(candidate)
 
 
 def get_fastsurfer_dir() -> str:
@@ -221,17 +196,19 @@ def get_t1w_image(wildcards: Any) -> str:
     """
     subject_label = str(wildcards.subject).replace("sub-", "").strip()
     bids_root = Path(get_bids_dir())
-    anat_dir = bids_root / f"sub-{subject_label}" / "anat"
-    standard_t1 = anat_dir / f"sub-{subject_label}_T1w.nii.gz"
+    sub_dir = bids_root / f"sub-{subject_label}"
+    anat_dirs = [sub_dir / "anat"] + sorted(sub_dir.glob("ses-*/anat"))
+    standard_t1 = sub_dir / "anat" / f"sub-{subject_label}_T1w.nii.gz"
 
     if standard_t1.exists():
         return str(standard_t1)
 
-    if anat_dir.exists():
-        for pattern in ["*T1w*.nii.gz", "*T1w*.nii"]:
-            matches = sorted(anat_dir.glob(pattern))
-            if matches:
-                return str(matches[0])
+    for a_dir in anat_dirs:
+        if a_dir.exists():
+            for pattern in ["*T1w*.nii.gz", "*T1w*.nii"]:
+                matches = sorted(a_dir.glob(pattern))
+                if matches:
+                    return str(matches[0])
 
     return str(standard_t1)
 
@@ -247,22 +224,24 @@ def get_t2w_image(wildcards: Any) -> str:
     """
     subject_label = str(wildcards.subject).replace("sub-", "").strip()
     bids_root = Path(get_bids_dir())
-    anat_dir = bids_root / f"sub-{subject_label}" / "anat"
-    standard_t2 = anat_dir / f"sub-{subject_label}_T2w.nii.gz"
-    standard_flair = anat_dir / f"sub-{subject_label}_FLAIR.nii.gz"
+    sub_dir = bids_root / f"sub-{subject_label}"
+    anat_dirs = [sub_dir / "anat"] + sorted(sub_dir.glob("ses-*/anat"))
+    standard_t2 = sub_dir / "anat" / f"sub-{subject_label}_T2w.nii.gz"
+    standard_flair = sub_dir / "anat" / f"sub-{subject_label}_FLAIR.nii.gz"
 
     if standard_t2.exists():
         return str(standard_t2)
     if standard_flair.exists():
         return str(standard_flair)
 
-    if anat_dir.exists():
-        for f in sorted(anat_dir.iterdir()):
-            if "t2w" in f.name.lower() and f.name.endswith((".nii", ".nii.gz")):
-                return str(f)
-        for f in sorted(anat_dir.iterdir()):
-            if "flair" in f.name.lower() and f.name.endswith((".nii", ".nii.gz")):
-                return str(f)
+    for a_dir in anat_dirs:
+        if a_dir.exists():
+            for f in sorted(a_dir.iterdir()):
+                if "t2w" in f.name.lower() and f.name.endswith((".nii", ".nii.gz")):
+                    return str(f)
+            for f in sorted(a_dir.iterdir()):
+                if "flair" in f.name.lower() and f.name.endswith((".nii", ".nii.gz")):
+                    return str(f)
 
     return str(standard_t2)
 
@@ -588,22 +567,24 @@ def get_mrs_svs_image(wildcards: Any) -> str:
     """
     subject_label = str(wildcards.subject).replace("sub-", "").strip()
     bids_root = Path(get_bids_dir())
-    mrs_dir = bids_root / f"sub-{subject_label}" / "mrs"
-    standard_svs = mrs_dir / f"sub-{subject_label}_svs.nii.gz"
+    sub_dir = bids_root / f"sub-{subject_label}"
+    mrs_dirs = [sub_dir / "mrs"] + sorted(sub_dir.glob("ses-*/mrs"))
+    standard_svs = sub_dir / "mrs" / f"sub-{subject_label}_svs.nii.gz"
 
     if standard_svs.exists():
         return str(standard_svs)
 
-    if mrs_dir.exists():
-        for pattern in [
-            "*svs*.nii.gz",
-            "*svs*.nii",
-            "*mrs*.nii.gz",
-            "*mrs*.nii",
-        ]:
-            matches = sorted(mrs_dir.glob(pattern))
-            if matches:
-                return str(matches[0])
+    for m_dir in mrs_dirs:
+        if m_dir.exists():
+            for pattern in [
+                "*svs*.nii.gz",
+                "*svs*.nii",
+                "*mrs*.nii.gz",
+                "*mrs*.nii",
+            ]:
+                matches = sorted(m_dir.glob(pattern))
+                if matches:
+                    return str(matches[0])
 
     return str(standard_svs)
 
@@ -619,23 +600,25 @@ def get_mrs_water_ref_image(wildcards: Any) -> str:
     """
     subject_label = str(wildcards.subject).replace("sub-", "").strip()
     bids_root = Path(get_bids_dir())
-    mrs_dir = bids_root / f"sub-{subject_label}" / "mrs"
-    standard_ref = mrs_dir / f"sub-{subject_label}_ref.nii.gz"
+    sub_dir = bids_root / f"sub-{subject_label}"
+    mrs_dirs = [sub_dir / "mrs"] + sorted(sub_dir.glob("ses-*/mrs"))
+    standard_ref = sub_dir / "mrs" / f"sub-{subject_label}_ref.nii.gz"
 
     if standard_ref.exists():
         return str(standard_ref)
 
-    if mrs_dir.exists():
-        for pattern in [
-            "*ref*.nii.gz",
-            "*ref*.nii",
-            "*water*.nii.gz",
-            "*wref*.nii.gz",
-            "*h2o*.nii.gz",
-        ]:
-            matches = sorted(mrs_dir.glob(pattern))
-            if matches:
-                return str(matches[0])
+    for m_dir in mrs_dirs:
+        if m_dir.exists():
+            for pattern in [
+                "*ref*.nii.gz",
+                "*ref*.nii",
+                "*water*.nii.gz",
+                "*wref*.nii.gz",
+                "*h2o*.nii.gz",
+            ]:
+                matches = sorted(m_dir.glob(pattern))
+                if matches:
+                    return str(matches[0])
 
     return ""
 

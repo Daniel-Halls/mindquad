@@ -5,6 +5,9 @@
 		},
 		{
 			"path": "../../pipeline_testing"
+		},
+		{
+			"path": "../../pilot/pilot_4"
 		}
 	],
 	"settings": {}
