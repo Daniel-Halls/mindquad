@@ -1,6 +1,7 @@
 """Mindquad Snakemake workflow entry point."""
 
 import os
+from pathlib import Path
 
 default_config = os.path.join(workflow.basedir, "../config/config.yaml")
 if os.path.exists(default_config):
@@ -17,11 +18,12 @@ include: "rules/hcp_postfreesurfer.smk"
 include: "rules/mrs.smk"
 
 
-
 def get_dynamic_targets(wildcards):
-    targets = [
-        f"{get_bids_dir()}/dataset_description.json",
-    ]
+    targets = []
+    
+    desc_file = Path(get_bids_dir()) / "dataset_description.json"
+    if not desc_file.is_file():
+        targets.append(f"{get_bids_dir()}/dataset_description.json")
     
     for subject in get_bids_subjects():
         # Evaluate checkpoint: forces Snakemake to wait for organize_bids_subject to finish
@@ -29,17 +31,19 @@ def get_dynamic_targets(wildcards):
         
         bids_dir = Path(get_bids_dir()) / f"sub-{subject}"
         
-        has_anat = (bids_dir / "anat").exists()
-        has_func = (bids_dir / "func").exists()
-        has_dwi = (bids_dir / "dwi").exists()
-        has_mrs = (bids_dir / "mrs").exists()
+        has_anat = (bids_dir / "anat").exists() or any(bids_dir.glob("ses-*/anat"))
+        has_func = (bids_dir / "func").exists() or any(bids_dir.glob("ses-*/func"))
+        has_dwi = (bids_dir / "dwi").exists() or any(bids_dir.glob("ses-*/dwi"))
+        has_mrs = (bids_dir / "mrs").exists() or any(bids_dir.glob("ses-*/mrs"))
         
         has_t2w = False
         has_flair = False
-        if has_anat:
-            anat_files = [f.name.lower() for f in (bids_dir / "anat").iterdir() if f.is_file()]
-            has_t2w = any("t2w" in f for f in anat_files)
-            has_flair = any("flair" in f for f in anat_files)
+        anat_dirs = [bids_dir / "anat"] + sorted(bids_dir.glob("ses-*/anat"))
+        for a_dir in anat_dirs:
+            if a_dir.exists():
+                anat_files = [f.name.lower() for f in a_dir.iterdir() if f.is_file()]
+                has_t2w = any("t2w" in f for f in anat_files) or has_t2w
+                has_flair = any("flair" in f for f in anat_files) or has_flair
 
         # Only append the terminal leaf nodes for this subject
         

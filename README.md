@@ -75,9 +75,10 @@ A template configuration file (`config_template.yaml`) is provided in the root o
 ### General & Paths
 | Option | Type | Mandatory? | Description |
 |---|---|---|---|
-| `raw_data_dir` | String | **Yes** | Absolute path to the raw DICOM dataset directory. |
+| `raw_data_dir` | String | **Yes** | Absolute path to raw DICOM data folder or pre-existing BIDS dataset. |
+| `is_bids` | Boolean | No | Explicitly declare whether `raw_data_dir` is already in BIDS format. If omitted, auto-detected. When true, `dcm2niix` is skipped. |
 | `output_dir` | String | No | Global output directory for pipeline outputs (Default: `.`). |
-| `bids_dir` | String | No | Output folder for BIDS-converted data (Default: `bids`). |
+| `bids_dir` | String | No | Output folder for BIDS data (Default: `bids`, or `raw_data_dir` when already BIDS). |
 | `derivatives_dir`| String | No | Output folder for all pipeline derivatives (Default: `derivatives`). |
 | `work_dir` | String | No | Intermediate working directory for tools like QSIPrep (Default: `work`). |
 | `tmp_dir` | String | No | Temporary directory for pipeline scratch data (Default: `.tmp`). |
@@ -140,6 +141,9 @@ mindquad -c /path/to/config.yaml -s slurm
 You do not need to manually configure the pipeline to skip modules if your dataset is missing modalities. Mindquad uses **Snakemake Checkpoints** at the BIDS conversion step. 
 
 The pipeline will automatically pause, scan the generated BIDS directories for each subject, and dynamically turn off downstream pipelines if the data doesn't exist. For example, if a subject has no `dwi/` folder, QSIPrep is automatically omitted for that subject. If the dataset has no `mrs/` folder, the MRS pipeline is completely skipped!
+
+### Pre-existing BIDS Ingestion (Auto-Skip `dcm2niix`)
+If your data has already been converted to BIDS format (e.g. from an earlier run or OpenNeuro), Mindquad detects this automatically (by checking for `dataset_description.json` or `sub-*/` modality directories) or via `is_bids: true` in your configuration. The `dcm2niix` conversion and BIDS reorganization steps are completely skipped, and all downstream pipelines run directly against the existing BIDS data without duplicating files.
 
 ### Native Parallel Execution
 Because Mindquad's dependencies are strictly defined, Snakemake inherently knows which steps can run simultaneously. Once the FastSurfer and BIDS steps complete, **fMRIPrep**, **QSIPrep**, and **MRS** are 100% independent. 
