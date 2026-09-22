@@ -147,10 +147,11 @@ def get_raw_subject_dir(wildcards: Any) -> str:
     subject_wildcard = wildcards.subject
     mapping: Dict[str, Any] = config.get("subject_mapping", {})
     reverse_mapping = {
-        cohort.get_bids_subject_label(s): s for s in cohort.subjects
+        cohort.get_bids_subject_label(sub_item): sub_item
+        for sub_item in cohort.subjects
     }
-    for k, v in mapping.items():
-        reverse_mapping[cohort.get_bids_subject_label(k)] = k
+    for map_key, map_val in mapping.items():
+        reverse_mapping[cohort.get_bids_subject_label(map_key)] = map_key
 
     raw_name = reverse_mapping.get(subject_wildcard, subject_wildcard)
     candidate = cohort.raw_data_dir / raw_name
@@ -234,14 +235,14 @@ def get_t2w_image(wildcards: Any) -> str:
     if standard_flair.exists():
         return str(standard_flair)
 
-    for a_dir in anat_dirs:
-        if a_dir.exists():
-            for f in sorted(a_dir.iterdir()):
-                if "t2w" in f.name.lower() and f.name.endswith((".nii", ".nii.gz")):
-                    return str(f)
-            for f in sorted(a_dir.iterdir()):
-                if "flair" in f.name.lower() and f.name.endswith((".nii", ".nii.gz")):
-                    return str(f)
+    for anat_dir in anat_dirs:
+        if anat_dir.exists():
+            for file_entry in sorted(anat_dir.iterdir()):
+                if "t2w" in file_entry.name.lower() and file_entry.name.endswith((".nii", ".nii.gz")):
+                    return str(file_entry)
+            for file_entry in sorted(anat_dir.iterdir()):
+                if "flair" in file_entry.name.lower() and file_entry.name.endswith((".nii", ".nii.gz")):
+                    return str(file_entry)
 
     return str(standard_t2)
 
@@ -628,13 +629,13 @@ def get_mrs_water_ref_image(wildcards: Any) -> str:
 def get_root_mounts(*paths: str) -> str:
     """Detect and return unique root directories from a list of paths for Singularity bindings."""
     roots = set()
-    for p in paths:
-        path = Path(p).resolve()
-        if len(path.parts) > 1:
-            roots.add(f"/{path.parts[1]}")
+    for path_str in paths:
+        resolved_path = Path(path_str).resolve()
+        if len(resolved_path.parts) > 1:
+            roots.add(f"/{resolved_path.parts[1]}")
     if not roots:
         return ""
-    return ",".join(f"{r}:{r}" for r in roots)
+    return ",".join(f"{root_path}:{root_path}" for root_path in roots)
 
 def _extract_load_components(load_val: Any) -> Tuple[str, str]:
     """Extract (module_string, file_path) from a load configuration value, supporting .sif and .sh."""
@@ -686,8 +687,8 @@ def get_tool_env_cmd(tool_name: str) -> str:
         else:
             if cleaned_str.startswith("module load "):
                 cleaned_str = cleaned_str[len("module load "):].strip()
-            for m in cleaned_str.split():
-                cmd_parts.append(f"module load {m} 2>/dev/null || true")
+            for module_item in cleaned_str.split():
+                cmd_parts.append(f"module load {module_item} 2>/dev/null || true")
         
     if not cmd_parts:
         return "true;"
