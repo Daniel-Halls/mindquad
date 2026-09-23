@@ -23,11 +23,17 @@ class BaseTest(unittest.TestCase):
     def setUpClass(cls) -> None:
         """Ensure project-local temporary folder exists."""
         cls.tmp_root = Path(".tmp")
-        cls.tmp_root.mkdir(parents=True, exist_ok=True)
+        try:
+            cls.tmp_root.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            pass
 
     def create_temp_dir(self) -> tempfile.TemporaryDirectory:
-        """Create temp directory inside project-local .tmp/."""
-        return tempfile.TemporaryDirectory(dir=str(self.tmp_root))
+        """Create temp directory inside .tmp/ or fallback to default temp."""
+        try:
+            return tempfile.TemporaryDirectory(dir=str(self.tmp_root))
+        except (OSError, PermissionError):
+            return tempfile.TemporaryDirectory()
 
 
 class TestFastSurferDevice(unittest.TestCase):
@@ -294,6 +300,20 @@ class TestFastSurferPathResolver(BaseTest):
             Path("derivatives/fastsurfer/sub-19081001/mri/aseg.mgz"),
         )
 
+    def test_get_wm_and_aparc_orig_files(self) -> None:
+        """Test wm.mgz and aparc.DKTatlas+aseg.orig.mgz path resolution."""
+        self.assertEqual(
+            self.resolver.get_wm_file("19081001"),
+            Path("derivatives/fastsurfer/sub-19081001/mri/wm.mgz"),
+        )
+        self.assertEqual(
+            self.resolver.get_aparc_orig_file("19081001"),
+            Path(
+                "derivatives/fastsurfer/sub-19081001/mri/"
+                "aparc.DKTatlas+aseg.orig.mgz"
+            ),
+        )
+
     def test_get_surface_and_stats_files(self) -> None:
         """Test surface and stats file path resolution."""
         self.assertEqual(
@@ -481,6 +501,120 @@ class TestFastSurferRunner(BaseTest):
             )
             self.assertEqual(return_code, 0)
             self.assertFalse(lock_file.exists())
+
+    def test_cleanup_recon_surf_artifacts_when_present(self) -> None:
+        """Test deleting wm.mgz and aparc.DKTatlas+aseg.orig.mgz files."""
+        with self.create_temp_dir() as temp_dir:
+            temp_path = Path(temp_dir)
+            subjects_directory = temp_path / "fastsurfer"
+            mri_directory = subjects_directory / "sub-01" / "mri"
+            mri_directory.mkdir(parents=True)
+            wm_file = mri_directory / "wm.mgz"
+            aparc_file = mri_directory / "aparc.DKTatlas+aseg.orig.mgz"
+            wm_file.write_text("wm data", encoding="utf-8")
+            aparc_file.write_text("aparc data", encoding="utf-8")
+
+            removed_status = self.runner.cleanup_recon_surf_artifacts(
+                subjects_dir=subjects_directory,
+                subject_id="sub-01",
+            )
+            self.assertTrue(removed_status)
+            self.assertFalse(wm_file.exists())
+            self.assertFalse(aparc_file.exists())
+
+    def test_cleanup_recon_surf_artifacts_when_absent(self) -> None:
+        """Test cleanup_recon_surf_artifacts when no collision files exist."""
+        with self.create_temp_dir() as temp_dir:
+            temp_path = Path(temp_dir)
+            subjects_directory = temp_path / "fastsurfer"
+            mri_directory = subjects_directory / "sub-01" / "mri"
+            mri_directory.mkdir(parents=True)
+
+            removed_status = self.runner.cleanup_recon_surf_artifacts(
+                subjects_dir=subjects_directory,
+                subject_id="sub-01",
+            )
+            self.assertFalse(removed_status)
+
+    def test_cleanup_recon_surf_artifacts_when_allow_edits_true(self) -> None:
+        """Test that allow_edits=True preserves recon-surf files."""
+        with self.create_temp_dir() as temp_dir:
+            temp_path = Path(temp_dir)
+            subjects_directory = temp_path / "fastsurfer"
+            mri_directory = subjects_directory / "sub-01" / "mri"
+            mri_directory.mkdir(parents=True)
+            wm_file = mri_directory / "wm.mgz"
+            wm_file.write_text("edited wm data", encoding="utf-8")
+
+            removed_status = self.runner.cleanup_recon_surf_artifacts(
+                subjects_dir=subjects_directory,
+                subject_id="sub-01",
+                allow_edits=True,
+            )
+            self.assertFalse(removed_status)
+            self.assertTrue(wm_file.exists())
+
+    @patch("subprocess.run")
+    def test_run_deletes_recon_surf_files_before_launch(
+        self, mock_subprocess_run: MagicMock
+    ) -> None:
+        """Test that runner.run deletes recon-surf collision files."""
+        mock_subprocess_run.return_value = MagicMock(returncode=0)
+        with self.create_temp_dir() as temp_dir:
+            temp_path = Path(temp_dir)
+            subjects_directory = temp_path / "fastsurfer"
+            temporary_directory = temp_path / ".tmp"
+            mri_directory = subjects_directory / "sub-01" / "mri"
+            mri_directory.mkdir(parents=True)
+            wm_file = mri_directory / "wm.mgz"
+            aparc_file = mri_directory / "aparc.DKTatlas+aseg.orig.mgz"
+            wm_file.write_text("wm data", encoding="utf-8")
+            aparc_file.write_text("aparc data", encoding="utf-8")
+
+            t1_image_path = temp_path / "sub-01_T1w.nii.gz"
+            t1_image_path.write_text("t1", encoding="utf-8")
+
+            return_code = self.runner.run(
+                t1_path=t1_image_path,
+                subjects_dir=subjects_directory,
+                subject_id="sub-01",
+                tmp_dir=temporary_directory,
+                threads=2,
+                device=FastSurferDevice.CPU,
+            )
+            self.assertEqual(return_code, 0)
+            self.assertFalse(wm_file.exists())
+            self.assertFalse(aparc_file.exists())
+
+    @patch("subprocess.run")
+    def test_run_preserves_recon_surf_files_with_edits_flag(
+        self, mock_subprocess_run: MagicMock
+    ) -> None:
+        """Test that runner.run preserves recon-surf files with --edits."""
+        mock_subprocess_run.return_value = MagicMock(returncode=0)
+        with self.create_temp_dir() as temp_dir:
+            temp_path = Path(temp_dir)
+            subjects_directory = temp_path / "fastsurfer"
+            temporary_directory = temp_path / ".tmp"
+            mri_directory = subjects_directory / "sub-01" / "mri"
+            mri_directory.mkdir(parents=True)
+            wm_file = mri_directory / "wm.mgz"
+            wm_file.write_text("manual edits wm", encoding="utf-8")
+
+            t1_image_path = temp_path / "sub-01_T1w.nii.gz"
+            t1_image_path.write_text("t1", encoding="utf-8")
+
+            return_code = self.runner.run(
+                t1_path=t1_image_path,
+                subjects_dir=subjects_directory,
+                subject_id="sub-01",
+                tmp_dir=temporary_directory,
+                threads=2,
+                device=FastSurferDevice.CPU,
+                extra_args="--edits",
+            )
+            self.assertEqual(return_code, 0)
+            self.assertTrue(wm_file.exists())
 
 
 class TestFastSurferApp(unittest.TestCase):

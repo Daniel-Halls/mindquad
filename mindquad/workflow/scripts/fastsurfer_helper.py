@@ -327,6 +327,32 @@ class FastSurferPathResolver:
 
         return standard_path
 
+    def get_wm_file(self, subject: str) -> Path:
+        """Return path to FastSurfer wm.mgz volume.
+
+        Args:
+            subject: Subject identifier.
+
+        Returns:
+            Path to wm.mgz file.
+        """
+        return self.get_subject_dir(subject) / "mri" / "wm.mgz"
+
+    def get_aparc_orig_file(self, subject: str) -> Path:
+        """Return path to FastSurfer aparc.DKTatlas+aseg.orig.mgz file.
+
+        Args:
+            subject: Subject identifier.
+
+        Returns:
+            Path to aparc.DKTatlas+aseg.orig.mgz file.
+        """
+        return (
+            self.get_subject_dir(subject)
+            / "mri"
+            / "aparc.DKTatlas+aseg.orig.mgz"
+        )
+
     def get_segmentation_file(self, subject: str) -> Path:
         """Return path to deep-learning whole-brain segmentation file.
 
@@ -416,6 +442,28 @@ class FastSurferRunner:
         """Initialize FastSurferRunner with logger."""
         self._logger = logging.getLogger(self.__class__.__name__)
 
+    def resolve_subject_dir(
+        self,
+        subjects_dir: Path,
+        subject_id: str,
+    ) -> Path:
+        """Resolve subject directory path under subjects_dir.
+
+        Args:
+            subjects_dir: FastSurfer subjects output directory.
+            subject_id: Subject identifier string.
+
+        Returns:
+            Path to subject directory.
+        """
+        clean_subject_id = subject_id.strip()
+        if clean_subject_id.startswith("sub-"):
+            return Path(subjects_dir) / clean_subject_id
+        prefixed_directory = Path(subjects_dir) / f"sub-{clean_subject_id}"
+        if prefixed_directory.is_dir():
+            return prefixed_directory
+        return Path(subjects_dir) / clean_subject_id
+
     def cleanup_is_running_lock(
         self,
         subjects_dir: Path,
@@ -430,16 +478,10 @@ class FastSurferRunner:
         Returns:
             bool: True if an IsRunning lock file was removed, False otherwise.
         """
-        clean_subject_id = subject_id.strip()
-        if clean_subject_id.startswith("sub-"):
-            subject_directory = Path(subjects_dir) / clean_subject_id
-        else:
-            prefixed_directory = Path(subjects_dir) / f"sub-{clean_subject_id}"
-            if prefixed_directory.is_dir():
-                subject_directory = prefixed_directory
-            else:
-                subject_directory = Path(subjects_dir) / clean_subject_id
-
+        subject_directory = self.resolve_subject_dir(
+            subjects_dir=subjects_dir,
+            subject_id=subject_id,
+        )
         scripts_directory = subject_directory / "scripts"
         if not scripts_directory.is_dir():
             return False
@@ -482,6 +524,67 @@ class FastSurferRunner:
                     )
 
         return lock_removed
+
+    def cleanup_recon_surf_artifacts(
+        self,
+        subjects_dir: Path,
+        subject_id: str,
+        allow_edits: bool = False,
+    ) -> bool:
+        """Check for and delete leftover recon-surf files before launch.
+
+        FastSurfer's recon-surf stage checks for existing mri/wm.mgz and
+        mri/aparc.DKTatlas+aseg.orig.mgz files. If present without the --edits
+        flag, recon-surf aborts with 'ERROR: Running on top of an existing
+        subject directory!'. When re-running on an incomplete subject
+        directory, these leftover files must be removed so recon-surf
+        can proceed cleanly.
+
+        Args:
+            subjects_dir: FastSurfer subjects output directory.
+            subject_id: Subject identifier string.
+            allow_edits: If True, preserve existing files for manual edits.
+
+        Returns:
+            bool: True if any recon-surf file was removed, False otherwise.
+        """
+        if allow_edits:
+            self._logger.info(
+                "Preserving existing recon-surf files because edits mode "
+                "is enabled."
+            )
+            return False
+
+        subject_directory = self.resolve_subject_dir(
+            subjects_dir=subjects_dir,
+            subject_id=subject_id,
+        )
+        mri_directory = subject_directory / "mri"
+        if not mri_directory.is_dir():
+            return False
+
+        collision_file_names = ["wm.mgz", "aparc.DKTatlas+aseg.orig.mgz"]
+        artifacts_removed = False
+
+        for file_name in collision_file_names:
+            collision_file_path = mri_directory / file_name
+            if collision_file_path.exists():
+                self._logger.info(
+                    "Found existing recon-surf collision file '%s'. "
+                    "Deleting before launching FastSurfer.",
+                    collision_file_path,
+                )
+                try:
+                    collision_file_path.unlink()
+                    artifacts_removed = True
+                except OSError as removal_error:
+                    self._logger.warning(
+                        "Failed to delete recon-surf file '%s': %s",
+                        collision_file_path,
+                        removal_error,
+                    )
+
+        return artifacts_removed
 
     def prepare_environment(
         self,
@@ -580,6 +683,14 @@ class FastSurferRunner:
         self.cleanup_is_running_lock(
             subjects_dir=subjects_dir,
             subject_id=subject_id,
+        )
+
+        # Check for and delete leftover recon-surf files before launch
+        allow_edits = "--edits" in (extra_args or "")
+        self.cleanup_recon_surf_artifacts(
+            subjects_dir=subjects_dir,
+            subject_id=subject_id,
+            allow_edits=allow_edits,
         )
 
         self._logger.info("Executing FastSurfer command: %s", " ".join(cmd))
