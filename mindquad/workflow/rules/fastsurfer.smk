@@ -1,11 +1,10 @@
-import sys
-"""Snakemake rules for FastSurfer structural whole-brain segmentation and surface reconstruction."""
+"""Snakemake rules for FastSurfer structural segmentation and reconstruction."""
 
-from pathlib import Path
+import sys
 
 
 rule fastsurfer_subject:
-    """Run FastSurfer deep-learning whole-brain segmentation and surface reconstruction on T1w image."""
+    """Run FastSurfer whole-brain segmentation and reconstruction on T1w image."""
     input:
         bids_marker=get_bids_dir() + "/sub-{subject}/.bids_organized",
         mriqc_group_marker=get_mriqc_dir() + "/.mriqc_group_complete",

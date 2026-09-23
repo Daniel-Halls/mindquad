@@ -1,13 +1,14 @@
-"""Helper module for FastSurfer execution, configuration, and path resolution."""
+"""Helper module for FastSurfer execution, configuration, and resolution."""
 
 import argparse
+from enum import Enum
 import logging
 import os
+from pathlib import Path
+import shlex
 import shutil
 import subprocess
 import sys
-from enum import Enum
-from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 
@@ -21,7 +22,7 @@ class FastSurferDevice(Enum):
 
     @classmethod
     def from_value(cls, value: Any) -> "FastSurferDevice":
-        """Convert a string or FastSurferDevice instance to FastSurferDevice enum.
+        """Convert a string or enum to FastSurferDevice.
 
         Args:
             value: Device name string or FastSurferDevice enum.
@@ -63,14 +64,14 @@ class FastSurferConfig:
         """Initialize FastSurfer configuration parameters.
 
         Args:
-            threads: Number of processing threads (must be between 1 and 2).
-            device: Computing device enum or string ('cpu', 'cuda', 'auto', 'mps').
+            threads: Number of processing threads.
+            device: Computing device enum or string.
             fs_license: Path to FreeSurfer license file.
             extra_args: Additional command line arguments string.
             batch_size: Inference batch size (default 1).
             seg_only: Run only whole-brain segmentation.
             surf_only: Run only surface reconstruction.
-            parallel: Run surface reconstruction for hemispheres in parallel.
+            parallel: Run surface reconstruction in parallel.
         """
         self._threads = threads
         self._device = (
@@ -134,11 +135,6 @@ class FastSurferConfig:
         Raises:
             ValueError: If thread limits or device settings are violated.
         """
-        if False: # self._threads > 2:
-            raise ValueError(
-                f"Resource constraint violation: threads ({self._threads}) "
-                "must be <= 2."
-            )
         if self._threads < 1:
             raise ValueError(
                 f"Invalid thread count: {self._threads}. Must be at least 1."
@@ -186,23 +182,21 @@ class FastSurferCommandBuilder:
             t1_path: Path to input structural T1w image.
             subjects_dir: Path to output subjects directory.
             subject_id: Subject identifier string.
+            executable: FastSurfer script or singularity command.
 
         Returns:
             List of CLI command tokens.
         """
         clean_sid = subject_id.strip()
-        
-        cmd: List[str] = []
+
+        command_tokens: List[str] = []
         if executable.startswith("singularity run"):
-            # Don't prefix with bash if it's a singularity wrapper command
-            import shlex
-            cmd.extend(shlex.split(executable))
+            command_tokens.extend(shlex.split(executable))
         else:
-            import shutil
             resolved_exe = shutil.which(executable) or executable
-            cmd.extend(["bash", resolved_exe])
-            
-        cmd.extend([
+            command_tokens.extend(["bash", resolved_exe])
+
+        command_tokens.extend([
             "--t1",
             str(t1_path),
             "--sd",
@@ -214,30 +208,32 @@ class FastSurferCommandBuilder:
         ])
 
         if self._config.device:
-            cmd.extend(["--device", self._config.device.value])
+            command_tokens.extend(["--device", self._config.device.value])
 
         if self._config.batch_size > 1:
-            cmd.extend(["--batch", str(self._config.batch_size)])
+            command_tokens.extend(["--batch", str(self._config.batch_size)])
 
         if self._config.fs_license and self._config.fs_license.strip():
-            cmd.extend(["--fs_license", self._config.fs_license.strip()])
+            command_tokens.extend(
+                ["--fs_license", self._config.fs_license.strip()]
+            )
 
         if self._config.seg_only:
-            cmd.append("--seg_only")
+            command_tokens.append("--seg_only")
         elif self._config.surf_only:
-            cmd.append("--surf_only")
+            command_tokens.append("--surf_only")
 
         # Always generate FreeSurfer-compatible parcellations for fMRIPrep
-        if "--fsaparc" not in cmd and not self._config.seg_only:
-            cmd.append("--fsaparc")
+        if "--fsaparc" not in command_tokens and not self._config.seg_only:
+            command_tokens.append("--fsaparc")
 
         if self._config.parallel:
-            cmd.append("--parallel")
+            command_tokens.append("--parallel")
 
         if self._config.extra_args and self._config.extra_args.strip():
-            cmd.extend(self._config.extra_args.strip().split())
+            command_tokens.extend(self._config.extra_args.strip().split())
 
-        return cmd
+        return command_tokens
 
 
 class FastSurferPathResolver:
@@ -284,6 +280,28 @@ class FastSurferPathResolver:
         clean_sub = subject.replace("sub-", "").strip()
         return self.fastsurfer_dir / f"sub-{clean_sub}"
 
+    def get_scripts_dir(self, subject: str) -> Path:
+        """Return path to FastSurfer subject scripts directory.
+
+        Args:
+            subject: Subject identifier.
+
+        Returns:
+            Path to scripts directory.
+        """
+        return self.get_subject_dir(subject) / "scripts"
+
+    def get_is_running_file(self, subject: str) -> Path:
+        """Return path to FastSurfer IsRunning.lh+rh lock file.
+
+        Args:
+            subject: Subject identifier.
+
+        Returns:
+            Path to IsRunning.lh+rh file.
+        """
+        return self.get_scripts_dir(subject) / "IsRunning.lh+rh"
+
     def resolve_t1w_path(self, subject: str) -> Path:
         """Resolve T1w anatomical image path for a subject in BIDS directory.
 
@@ -318,7 +336,8 @@ class FastSurferPathResolver:
         Returns:
             Path to aparc.DKTatlas+aseg.deep.mgz file.
         """
-        return self.get_subject_dir(subject) / "mri" / "aparc.DKTatlas+aseg.deep.mgz"
+        subject_dir = self.get_subject_dir(subject)
+        return subject_dir / "mri" / "aparc.DKTatlas+aseg.deep.mgz"
 
     def get_orig_mgz_file(self, subject: str) -> Path:
         """Return path to conformed orig.mgz volume.
@@ -397,17 +416,84 @@ class FastSurferRunner:
         """Initialize FastSurferRunner with logger."""
         self._logger = logging.getLogger(self.__class__.__name__)
 
+    def cleanup_is_running_lock(
+        self,
+        subjects_dir: Path,
+        subject_id: str,
+    ) -> bool:
+        """Check for and delete FastSurfer IsRunning lock files before launch.
+
+        Args:
+            subjects_dir: FastSurfer subjects output directory.
+            subject_id: Subject identifier string.
+
+        Returns:
+            bool: True if an IsRunning lock file was removed, False otherwise.
+        """
+        clean_subject_id = subject_id.strip()
+        if clean_subject_id.startswith("sub-"):
+            subject_directory = Path(subjects_dir) / clean_subject_id
+        else:
+            prefixed_directory = Path(subjects_dir) / f"sub-{clean_subject_id}"
+            if prefixed_directory.is_dir():
+                subject_directory = prefixed_directory
+            else:
+                subject_directory = Path(subjects_dir) / clean_subject_id
+
+        scripts_directory = subject_directory / "scripts"
+        if not scripts_directory.is_dir():
+            return False
+
+        is_running_file = scripts_directory / "IsRunning.lh+rh"
+        lock_removed = False
+
+        if is_running_file.exists():
+            self._logger.info(
+                "Found FastSurfer lock file '%s'. "
+                "Deleting before launching FastSurfer.",
+                is_running_file,
+            )
+            try:
+                is_running_file.unlink()
+                lock_removed = True
+            except OSError as removal_error:
+                self._logger.warning(
+                    "Failed to delete FastSurfer lock file '%s': %s",
+                    is_running_file,
+                    removal_error,
+                )
+
+        # Also check for any extra IsRunning lock variants (e.g. lh or rh)
+        for lock_file_path in scripts_directory.glob("IsRunning*"):
+            if lock_file_path.is_file():
+                self._logger.info(
+                    "Found additional FastSurfer lock file '%s'. "
+                    "Deleting before launching FastSurfer.",
+                    lock_file_path,
+                )
+                try:
+                    lock_file_path.unlink()
+                    lock_removed = True
+                except OSError as removal_error:
+                    self._logger.warning(
+                        "Failed to delete lock file '%s': %s",
+                        lock_file_path,
+                        removal_error,
+                    )
+
+        return lock_removed
+
     def prepare_environment(
         self,
         tmp_dir: Path,
         threads: int,
         fs_license: Optional[str] = None,
     ) -> Dict[str, str]:
-        """Prepare subprocess environment dictionary with thread and license settings.
+        """Prepare environment dictionary with thread and license settings.
 
         Args:
             tmp_dir: Project-local temporary directory path.
-            threads: Maximum thread count (must be <= 2).
+            threads: Maximum thread count.
             fs_license: Optional path to FreeSurfer license file.
 
         Returns:
@@ -419,26 +505,26 @@ class FastSurferRunner:
         env["OMP_NUM_THREADS"] = str(threads)
         env["OPENBLAS_NUM_THREADS"] = str(threads)
         env["MKL_NUM_THREADS"] = str(threads)
-        
+
         # Ensure Singularity/Apptainer mounts host directories
         bind_paths = f"{tmp_dir}:/tmp,{tmp_dir}:/var/tmp"
         if "SINGULARITY_BIND" in env:
             env["SINGULARITY_BIND"] += f",{bind_paths}"
         else:
             env["SINGULARITY_BIND"] = bind_paths
-            
+
         if "APPTAINER_BIND" in env:
             env["APPTAINER_BIND"] += f",{bind_paths}"
         else:
             env["APPTAINER_BIND"] = bind_paths
-            
+
         # Force Singularity to mount NVIDIA drivers
         env["SINGULARITY_NV"] = "1"
         env["APPTAINER_NV"] = "1"
-        
+
         # Force PyTorch to use exactly one GPU
         env["CUDA_VISIBLE_DEVICES"] = "0"
-            
+
         if fs_license and fs_license.strip():
             env["FS_LICENSE"] = str(fs_license).strip()
         return env
@@ -468,6 +554,7 @@ class FastSurferRunner:
             fs_license: Optional path to FreeSurfer license file.
             extra_args: Additional CLI flags string.
             marker_path: Optional marker file path touched upon completion.
+            executable: FastSurfer execution command or script.
 
         Returns:
             Process exit status code integer.
@@ -479,28 +566,47 @@ class FastSurferRunner:
             extra_args=extra_args,
         )
         builder = FastSurferCommandBuilder(config)
-        cmd = builder.build_command(t1_path, subjects_dir, subject_id, executable)
+        cmd = builder.build_command(
+            t1_path=t1_path,
+            subjects_dir=subjects_dir,
+            subject_id=subject_id,
+            executable=executable,
+        )
 
         subjects_dir.mkdir(parents=True, exist_ok=True)
         env = self.prepare_environment(tmp_dir, threads, fs_license)
 
+        # Check for and delete FastSurfer IsRunning lock files before launch
+        self.cleanup_is_running_lock(
+            subjects_dir=subjects_dir,
+            subject_id=subject_id,
+        )
+
         self._logger.info("Executing FastSurfer command: %s", " ".join(cmd))
-        # Dynamically inject root mounts for wrapper-based singularity containers
-        def get_root_mount(path: str) -> str:
-            p = Path(path).resolve()
-            return f"/{p.parts[1]}" if len(p.parts) > 1 else ""
-            
-        roots = set()
-        for p in [t1_path, subjects_dir, fs_license]:
-            if p:
-                r = get_root_mount(str(p))
-                if r:
-                    roots.add(f"{r}:{r}")
-                    
-        if roots:
-            root_binds = ",".join(roots)
-            for k in ["SINGULARITY_BIND", "APPTAINER_BIND"]:
-                env[k] = f"{root_binds},{env[k]}" if k in env else root_binds
+
+        # Dynamically inject root mounts for singularity containers
+        def get_root_mount(target_path_str: str) -> str:
+            resolved_path = Path(target_path_str).resolve()
+            return (
+                f"/{resolved_path.parts[1]}"
+                if len(resolved_path.parts) > 1
+                else ""
+            )
+
+        mount_roots = set()
+        for path_argument in [t1_path, subjects_dir, fs_license]:
+            if path_argument:
+                root_prefix = get_root_mount(str(path_argument))
+                if root_prefix:
+                    mount_roots.add(f"{root_prefix}:{root_prefix}")
+
+        if mount_roots:
+            root_binds = ",".join(mount_roots)
+            for env_var_name in ["SINGULARITY_BIND", "APPTAINER_BIND"]:
+                if env_var_name in env:
+                    env[env_var_name] = f"{root_binds},{env[env_var_name]}"
+                else:
+                    env[env_var_name] = root_binds
 
         result = subprocess.run(cmd, env=env, check=False)
 
@@ -556,7 +662,7 @@ class FastSurferApp:
             "--threads",
             type=int,
             default=2,
-            help="Thread count (max 2)",
+            help="Thread count",
         )
         parser.add_argument(
             "--device",

@@ -1,5 +1,6 @@
 """Unit tests for FastSurfer helper classes and configuration."""
 
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -65,7 +66,8 @@ class TestFastSurferDevice(unittest.TestCase):
         """Test from_value raising ValueError on unsupported string."""
         with self.assertRaises(ValueError) as context:
             FastSurferDevice.from_value("invalid_device")
-        self.assertIn("Unsupported device 'invalid_device'", str(context.exception))
+        expected_msg = "Unsupported device 'invalid_device'"
+        self.assertIn(expected_msg, str(context.exception))
 
     def test_from_value_invalid_type(self) -> None:
         """Test from_value raising ValueError on invalid type."""
@@ -134,7 +136,7 @@ class TestFastSurferConfig(unittest.TestCase):
         self.assertIn("Invalid thread count: 0", str(context.exception))
 
     def test_invalid_device_string(self) -> None:
-        """Test that unsupported device string raises ValueError during init."""
+        """Test that unsupported device string raises ValueError."""
         with self.assertRaises(ValueError) as context:
             FastSurferConfig(device="tpu")
         self.assertIn("Unsupported device 'tpu'", str(context.exception))
@@ -151,7 +153,8 @@ class TestFastSurferConfig(unittest.TestCase):
         config = FastSurferConfig(seg_only=True, surf_only=True)
         with self.assertRaises(ValueError) as context:
             config.validate()
-        self.assertIn("Cannot specify both seg_only and surf_only", str(context.exception))
+        expected_msg = "Cannot specify both seg_only and surf_only"
+        self.assertIn(expected_msg, str(context.exception))
 
 
 class TestFastSurferCommandBuilder(unittest.TestCase):
@@ -165,8 +168,10 @@ class TestFastSurferCommandBuilder(unittest.TestCase):
             subjects_dir=Path("derivatives/fastsurfer"),
             subject_id="sub-19081001",
         )
+        resolved_exe = shutil.which("run_fastsurfer.sh") or "run_fastsurfer.sh"
         expected_cmd = [
-            "run_fastsurfer.sh",
+            "bash",
+            resolved_exe,
             "--t1",
             "bids/sub-19081001/anat/sub-19081001_T1w.nii.gz",
             "--sd",
@@ -177,11 +182,12 @@ class TestFastSurferCommandBuilder(unittest.TestCase):
             "2",
             "--device",
             "cpu",
+            "--fsaparc",
         ]
         self.assertEqual(cmd, expected_cmd)
 
     def test_build_command_with_options(self) -> None:
-        """Test command building with license, batch size, and parallel flags."""
+        """Test command building with license, batch size, and flags."""
         config = FastSurferConfig(
             threads=1,
             device=FastSurferDevice.CUDA,
@@ -197,8 +203,10 @@ class TestFastSurferCommandBuilder(unittest.TestCase):
             subjects_dir=Path("derivatives/fastsurfer"),
             subject_id="sub-01",
         )
+        resolved_exe = shutil.which("run_fastsurfer.sh") or "run_fastsurfer.sh"
         expected_cmd = [
-            "run_fastsurfer.sh",
+            "bash",
+            resolved_exe,
             "--t1",
             "bids/sub-01/anat/sub-01_T1w.nii.gz",
             "--sd",
@@ -214,6 +222,7 @@ class TestFastSurferCommandBuilder(unittest.TestCase):
             "--fs_license",
             "/path/to/license.txt",
             "--surf_only",
+            "--fsaparc",
             "--parallel",
             "--qc_snap",
             "--vol_segstats",
@@ -250,15 +259,25 @@ class TestFastSurferPathResolver(BaseTest):
             Path("derivatives/fastsurfer/sub-19081001"),
         )
 
+    def test_scripts_and_is_running_file(self) -> None:
+        """Test scripts directory and IsRunning.lh+rh path resolution."""
+        expected_scripts = Path("derivatives/fastsurfer/sub-01/scripts")
+        self.assertEqual(
+            self.resolver.get_scripts_dir("01"), expected_scripts
+        )
+        self.assertEqual(
+            self.resolver.get_is_running_file("01"),
+            expected_scripts / "IsRunning.lh+rh",
+        )
+
     def test_get_segmentation_file(self) -> None:
         """Test deep segmentation path resolution."""
         seg_file = self.resolver.get_segmentation_file("19081001")
-        self.assertEqual(
-            seg_file,
-            Path(
-                "derivatives/fastsurfer/sub-19081001/mri/aparc.DKTatlas+aseg.deep.mgz"
-            ),
+        expected_seg_path = (
+            "derivatives/fastsurfer/sub-19081001/mri/"
+            "aparc.DKTatlas+aseg.deep.mgz"
         )
+        self.assertEqual(seg_file, Path(expected_seg_path))
 
     def test_get_orig_and_brainmask_files(self) -> None:
         """Test orig.mgz, brainmask.mgz, and aseg.mgz paths."""
@@ -382,6 +401,86 @@ class TestFastSurferRunner(BaseTest):
             )
             self.assertEqual(ret, 1)
             self.assertFalse(marker.exists())
+
+    def test_cleanup_is_running_lock_when_present(self) -> None:
+        """Test deleting IsRunning.lh+rh and related lock files."""
+        with self.create_temp_dir() as temp_dir:
+            temp_path = Path(temp_dir)
+            subjects_directory = temp_path / "fastsurfer"
+            scripts_directory = subjects_directory / "sub-01" / "scripts"
+            scripts_directory.mkdir(parents=True)
+            lock_file = scripts_directory / "IsRunning.lh+rh"
+            lock_file.write_text("lock", encoding="utf-8")
+
+            removed_status = self.runner.cleanup_is_running_lock(
+                subjects_dir=subjects_directory,
+                subject_id="sub-01",
+            )
+            self.assertTrue(removed_status)
+            self.assertFalse(lock_file.exists())
+
+    def test_cleanup_is_running_lock_when_absent(self) -> None:
+        """Test cleanup_is_running_lock when no lock file exists."""
+        with self.create_temp_dir() as temp_dir:
+            temp_path = Path(temp_dir)
+            subjects_directory = temp_path / "fastsurfer"
+            scripts_directory = subjects_directory / "sub-01" / "scripts"
+            scripts_directory.mkdir(parents=True)
+
+            removed_status = self.runner.cleanup_is_running_lock(
+                subjects_dir=subjects_directory,
+                subject_id="sub-01",
+            )
+            self.assertFalse(removed_status)
+
+    def test_cleanup_is_running_lock_variants(self) -> None:
+        """Test deleting additional IsRunning.* variant files."""
+        with self.create_temp_dir() as temp_dir:
+            temp_path = Path(temp_dir)
+            subjects_directory = temp_path / "fastsurfer"
+            scripts_directory = subjects_directory / "sub-01" / "scripts"
+            scripts_directory.mkdir(parents=True)
+            lh_lock_file = scripts_directory / "IsRunning.lh"
+            rh_lock_file = scripts_directory / "IsRunning.rh"
+            lh_lock_file.write_text("lh lock", encoding="utf-8")
+            rh_lock_file.write_text("rh lock", encoding="utf-8")
+
+            removed_status = self.runner.cleanup_is_running_lock(
+                subjects_dir=subjects_directory,
+                subject_id="sub-01",
+            )
+            self.assertTrue(removed_status)
+            self.assertFalse(lh_lock_file.exists())
+            self.assertFalse(rh_lock_file.exists())
+
+    @patch("subprocess.run")
+    def test_run_deletes_is_running_file_before_launch(
+        self, mock_subprocess_run: MagicMock
+    ) -> None:
+        """Test that runner.run deletes IsRunning.lh+rh before launching."""
+        mock_subprocess_run.return_value = MagicMock(returncode=0)
+        with self.create_temp_dir() as temp_dir:
+            temp_path = Path(temp_dir)
+            subjects_directory = temp_path / "fastsurfer"
+            temporary_directory = temp_path / ".tmp"
+            scripts_directory = subjects_directory / "sub-01" / "scripts"
+            scripts_directory.mkdir(parents=True)
+            lock_file = scripts_directory / "IsRunning.lh+rh"
+            lock_file.write_text("stale lock", encoding="utf-8")
+
+            t1_image_path = temp_path / "sub-01_T1w.nii.gz"
+            t1_image_path.write_text("t1", encoding="utf-8")
+
+            return_code = self.runner.run(
+                t1_path=t1_image_path,
+                subjects_dir=subjects_directory,
+                subject_id="sub-01",
+                tmp_dir=temporary_directory,
+                threads=2,
+                device=FastSurferDevice.CPU,
+            )
+            self.assertEqual(return_code, 0)
+            self.assertFalse(lock_file.exists())
 
 
 class TestFastSurferApp(unittest.TestCase):
