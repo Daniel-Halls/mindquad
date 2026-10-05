@@ -46,8 +46,11 @@ class BaseBIDSTest(unittest.TestCase):
         cls.project_tmp_dir.mkdir(parents=True, exist_ok=True)
 
     def create_temp_dir(self) -> tempfile.TemporaryDirectory:
-        """Create a temporary directory strictly inside project-local .tmp/."""
-        return tempfile.TemporaryDirectory(dir=str(self.project_tmp_dir))
+        """Create a temporary directory inside project-local .tmp/ or fallback."""
+        try:
+            return tempfile.TemporaryDirectory(dir=str(self.project_tmp_dir))
+        except (OSError, PermissionError):
+            return tempfile.TemporaryDirectory()
 
 
 class TestBIDSInitializer(BaseBIDSTest):
@@ -138,6 +141,62 @@ class TestDICOMSeriesClassifier(BaseBIDSTest):
             self.assertIsNotNone(classification)
             self.assertEqual(classification.modality, BIDSModality.MRS)
             self.assertEqual(classification.suffix, "svs")
+
+    def test_classify_fmap_bold_pepolar(self) -> None:
+        """Test classification of fMRI spin-echo pepolar fieldmap."""
+        with self.create_temp_dir() as temp_dir:
+            json_file = Path(temp_dir) / "test_fmap_bold.json"
+            json_file.write_text(
+                json.dumps({
+                    "SeriesDescription": "fMRI_SE_b0 pepolar=1",
+                    "PhaseEncodingDirection": "j-",
+                }),
+                encoding="utf-8",
+            )
+            classification = self.classifier.classify_series(
+                json_file, "test_fmap_bold"
+            )
+            self.assertIsNotNone(classification)
+            self.assertEqual(classification.modality, BIDSModality.FMAP)
+            self.assertEqual(classification.suffix, "epi")
+            self.assertEqual(classification.entities.get("acq"), "bold")
+            self.assertEqual(classification.entities.get("dir"), "AP")
+
+    def test_classify_fmap_dwi_pepolar(self) -> None:
+        """Test classification of DTI pepolar fieldmap."""
+        with self.create_temp_dir() as temp_dir:
+            json_file = Path(temp_dir) / "test_fmap_dwi.json"
+            json_file.write_text(
+                json.dumps({
+                    "SeriesDescription": "DTI_MB3_2x2x2mm_pepolar",
+                    "PhaseEncodingDirection": "j",
+                }),
+                encoding="utf-8",
+            )
+            classification = self.classifier.classify_series(
+                json_file, "test_fmap_dwi"
+            )
+            self.assertIsNotNone(classification)
+            self.assertEqual(classification.modality, BIDSModality.FMAP)
+            self.assertEqual(classification.suffix, "epi")
+            self.assertEqual(classification.entities.get("acq"), "dwi")
+            self.assertEqual(classification.entities.get("dir"), "PA")
+
+    def test_classify_task_name_from_am_task(self) -> None:
+        """Test task name extraction from AM_task_FINAL description."""
+        with self.create_temp_dir() as temp_dir:
+            json_file = Path(temp_dir) / "test_task_am.json"
+            json_file.write_text(
+                json.dumps({"SeriesDescription": "AM_task_FINAL"}),
+                encoding="utf-8",
+            )
+            classification = self.classifier.classify_series(
+                json_file, "test_task_am"
+            )
+            self.assertIsNotNone(classification)
+            self.assertEqual(classification.modality, BIDSModality.FUNC)
+            self.assertEqual(classification.suffix, "bold")
+            self.assertEqual(classification.entities.get("task"), "am")
 
 
 class TestBIDSFilenameBuilder(unittest.TestCase):
@@ -267,6 +326,157 @@ class TestBIDSOrganizer(BaseBIDSTest):
             self.assertTrue(run2_nii.exists(), "Run 2 NIfTI must exist")
             self.assertTrue(run2_json.exists(), "Run 2 JSON must exist")
 
+    def test_organize_subject_with_fieldmaps_intended_for(self) -> None:
+        """Test organizing subject with BOLD and DWI fieldmaps injects proper IntendedFor."""
+        with self.create_temp_dir() as temp_dir:
+            temp_path = Path(temp_dir)
+            input_dir = temp_path / "dcm2niix_out"
+            bids_dir = temp_path / "bids"
+            input_dir.mkdir(parents=True)
+            bids_dir.mkdir(parents=True)
+
+            # 1. BOLD functional scan: AM_task_FINAL
+            bold_meta = {
+                "SeriesDescription": "AM_task_FINAL",
+                "SeriesNumber": 6,
+            }
+            (input_dir / "006_AM_task.json").write_text(
+                json.dumps(bold_meta), encoding="utf-8"
+            )
+            (input_dir / "006_AM_task.nii.gz").write_text(
+                "mock bold", encoding="utf-8"
+            )
+
+            # 2. DWI scan: DTI_MB3_2x2x2mm
+            dwi_meta = {
+                "SeriesDescription": "DTI_MB3_2x2x2mm",
+                "PhaseEncodingDirection": "j-",
+                "SeriesNumber": 8,
+            }
+            (input_dir / "008_dti.json").write_text(
+                json.dumps(dwi_meta), encoding="utf-8"
+            )
+            (input_dir / "008_dti.nii.gz").write_text(
+                "mock dwi", encoding="utf-8"
+            )
+
+            # 3. fMRI spin-echo fieldmap: fMRI_SE_b0 pepolar=1
+            fmap_bold_meta = {
+                "SeriesDescription": "fMRI_SE_b0 pepolar=1",
+                "PhaseEncodingDirection": "j-",
+                "SeriesNumber": 7,
+            }
+            (input_dir / "007_fmap_bold.json").write_text(
+                json.dumps(fmap_bold_meta), encoding="utf-8"
+            )
+            (input_dir / "007_fmap_bold.nii.gz").write_text(
+                "mock fmap bold", encoding="utf-8"
+            )
+
+            # 4. DWI spin-echo fieldmap: DTI_MB3_2x2x2mm_pepolar
+            fmap_dwi_meta = {
+                "SeriesDescription": "DTI_MB3_2x2x2mm_pepolar",
+                "PhaseEncodingDirection": "j",
+                "SeriesNumber": 9,
+            }
+            (input_dir / "009_fmap_dwi.json").write_text(
+                json.dumps(fmap_dwi_meta), encoding="utf-8"
+            )
+            (input_dir / "009_fmap_dwi.nii.gz").write_text(
+                "mock fmap dwi", encoding="utf-8"
+            )
+
+            organizer = BIDSOrganizer()
+            transferred = organizer.organize_subject(
+                input_dir, bids_dir, "VNS001", session_label="01"
+            )
+
+            # Verify transferred count (4 pairs of .nii.gz and .json = 8 files)
+            self.assertEqual(transferred, 8)
+
+            ses_dir = bids_dir / "sub-VNS001" / "ses-01"
+            fmap_dir = ses_dir / "fmap"
+
+            # Check BOLD fieldmap exists with acq-bold
+            bold_fmap_json = (
+                fmap_dir / "sub-VNS001_ses-01_acq-bold_dir-AP_epi.json"
+            )
+            self.assertTrue(bold_fmap_json.exists())
+            with open(bold_fmap_json, "r", encoding="utf-8") as fh:
+                bold_fmap_data = json.load(fh)
+            self.assertEqual(
+                bold_fmap_data.get("IntendedFor"),
+                "ses-01/func/sub-VNS001_ses-01_task-am_bold.nii.gz",
+            )
+
+            # Check DWI fieldmap exists with acq-dwi
+            dwi_fmap_json = (
+                fmap_dir / "sub-VNS001_ses-01_acq-dwi_dir-PA_epi.json"
+            )
+            self.assertTrue(dwi_fmap_json.exists())
+            with open(dwi_fmap_json, "r", encoding="utf-8") as fh:
+                dwi_fmap_data = json.load(fh)
+            self.assertEqual(
+                dwi_fmap_data.get("IntendedFor"),
+                "ses-01/dwi/sub-VNS001_ses-01_dir-AP_dwi.nii.gz",
+            )
+
+    def test_organize_subject_single_session_fieldmap_intended_for(self) -> None:
+        """Test organizing single-session dataset with DWI fieldmap (like pipeline_testing)."""
+        with self.create_temp_dir() as temp_dir:
+            temp_path = Path(temp_dir)
+            input_dir = temp_path / "dcm2niix_out"
+            bids_dir = temp_path / "bids"
+            input_dir.mkdir(parents=True)
+            bids_dir.mkdir(parents=True)
+
+            # DWI scan: DTI_MB3_2x2x2mm
+            dwi_meta = {
+                "SeriesDescription": "DTI_MB3_2x2x2mm",
+                "PhaseEncodingDirection": "j-",
+                "SeriesNumber": 8,
+            }
+            (input_dir / "008_dti.json").write_text(
+                json.dumps(dwi_meta), encoding="utf-8"
+            )
+            (input_dir / "008_dti.nii.gz").write_text(
+                "mock dwi", encoding="utf-8"
+            )
+
+            # DWI Fieldmap: DTI_MB3_2x2x2mm_pepolar
+            fmap_dwi_meta = {
+                "SeriesDescription": "DTI_MB3_2x2x2mm_pepolar",
+                "PhaseEncodingDirection": "j",
+                "SeriesNumber": 7,
+            }
+            (input_dir / "007_fmap_dwi.json").write_text(
+                json.dumps(fmap_dwi_meta), encoding="utf-8"
+            )
+            (input_dir / "007_fmap_dwi.nii.gz").write_text(
+                "mock fmap dwi", encoding="utf-8"
+            )
+
+            organizer = BIDSOrganizer()
+            transferred = organizer.organize_subject(
+                input_dir, bids_dir, "19081001"
+            )
+
+            self.assertEqual(transferred, 4)
+
+            sub_dir = bids_dir / "sub-19081001"
+            fmap_json = (
+                sub_dir / "fmap" / "sub-19081001_acq-dwi_dir-PA_epi.json"
+            )
+            self.assertTrue(fmap_json.exists())
+            with open(fmap_json, "r", encoding="utf-8") as fh:
+                data = json.load(fh)
+            self.assertEqual(
+                data.get("IntendedFor"),
+                "dwi/sub-19081001_dir-AP_dwi.nii.gz",
+            )
+
+
+
 
 class TestStudyCohort(BaseBIDSTest):
     """Test cases for StudyCohort BIDS detection and subject resolution."""
@@ -349,6 +559,12 @@ class TestStudyCohort(BaseBIDSTest):
         """Test subject mapping respects configured dictionary and strips sub-."""
         cohort = StudyCohort({"subject_mapping": {"raw_sub": "sub-10"}})
         self.assertEqual(cohort.get_bids_subject_label("raw_sub"), "10")
+
+    def test_get_bids_subject_label_with_none_mapping(self) -> None:
+        """Test subject mapping safely handles None when left blank in YAML."""
+        cohort = StudyCohort({"subject_mapping": None, "subjects": None})
+        self.assertEqual(cohort.get_bids_subject_label("sub-01"), "01")
+        self.assertEqual(cohort.get_bids_subject_label("VNS001_A"), "VNS001A")
 
 
 if __name__ == "__main__":

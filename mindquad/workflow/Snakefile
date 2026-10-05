@@ -26,6 +26,9 @@ def get_dynamic_targets(wildcards):
     if not description_file.is_file():
         targets.append(f"{get_bids_dir()}/dataset_description.json")
 
+    if is_pipeline_enabled("mriqc"):
+        targets.append(f"{get_mriqc_dir()}/.mriqc_group_complete")
+
     for subject_label in get_bids_subjects():
         # Evaluate checkpoint: forces Snakemake to wait for organize_bids_subject to finish
         checkpoints.organize_bids_subject.get(subject=subject_label)
@@ -67,7 +70,7 @@ def get_dynamic_targets(wildcards):
                 )
 
         # FastSurfer structural processing runs whenever anatomical data exists
-        if has_anat:
+        if has_anat and is_pipeline_enabled("fastsurfer"):
             targets.append(
                 f"{get_fastsurfer_dir()}/sub-{subject_label}/.fastsurfer_complete"
             )
@@ -76,21 +79,21 @@ def get_dynamic_targets(wildcards):
             )
 
         # If subject has functional data, fMRIPrep runs (integrates FastSurfer outputs)
-        if has_func and has_anat:
+        if has_func and has_anat and is_pipeline_enabled("fmriprep"):
             targets.append(
                 f"{get_fmriprep_dir()}/sub-{subject_label}/.fmriprep_complete"
             )
             targets.append(f"{get_fmriprep_dir()}/sub-{subject_label}.html")
 
         # If subject has DWI data, QSIPrep runs in parallel with FastSurfer
-        if has_dwi and has_anat:
+        if has_dwi and has_anat and is_pipeline_enabled("qsiprep"):
             targets.append(
                 f"{get_qsiprep_dir()}/sub-{subject_label}/.qsiprep_complete"
             )
             targets.append(f"{get_qsiprep_dir()}/sub-{subject_label}.html")
 
         # If subject has T2w or FLAIR data, HCP PostFreeSurfer runs
-        if (has_t2w or has_flair) and has_anat:
+        if (has_t2w or has_flair) and has_anat and is_pipeline_enabled("hcp"):
             targets.append(
                 f"{get_hcp_dir()}/sub-{subject_label}/.hcp_complete"
             )
@@ -100,7 +103,7 @@ def get_dynamic_targets(wildcards):
             )
 
         # If subject has MRS data, MRS processing runs in parallel with FastSurfer
-        if has_mrs and has_anat:
+        if has_mrs and has_anat and is_pipeline_enabled("mrs"):
             targets.append(
                 f"{get_mrs_dir()}/sub-{subject_label}/.mrs_complete"
             )

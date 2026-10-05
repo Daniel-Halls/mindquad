@@ -1,0 +1,101 @@
+# ==============================================================================
+# Mindquad SLURM Profile Configuration
+# ==============================================================================
+# Use this profile by running:
+#   mindquad -c config.yaml -s profiles/slurm
+# Or copy to ~/.config/snakemake/slurm/config.yaml and run:
+#   mindquad -c config.yaml -s slurm
+# ==============================================================================
+
+executor: cluster-generic
+cluster-generic-submit-cmd: >-
+  mkdir -p logs/slurm &&
+  sbatch
+  --parsable
+  --job-name="mq.{rule}.{wildcards}"
+  --output="logs/slurm/%j-{rule}.out"
+  --error="logs/slurm/%j-{rule}.err"
+  --cpus-per-task={threads}
+  --mem={resources.mem_mb}M
+  --time={resources.time}
+  --partition={resources.partition}
+  {resources.account}
+  {resources.qos}
+  {resources.gres}
+cluster-generic-cancel-cmd: scancel
+
+jobs: 50
+max-jobs-per-second: 10
+max-status-checks-per-second: 10
+latency-wait: 60
+restart-times: 0
+keep-going: true
+rerun-incomplete: true
+printshellcmds: true
+
+default-resources:
+  - account=""              # Optional: e.g. "--account=my_project" (leave blank if not needed)
+  - qos=""                  # Optional: e.g. "--qos=my_qos" (leave blank if not needed)
+  - partition="standard"     # Default SLURM partition / queue name
+  - mem_mb=8000
+  - time="02:00:00"
+  - gres=""
+
+set-resources:
+  fastsurfer_subject:
+    partition: "imgvoltaq"
+    mem_mb: 16000
+    time: "03:00:00"
+    gres: "--gres=gpu:1"
+
+  fmriprep_participant:
+    partition: "imgampereq"
+    mem_mb: 32000
+    time: "24:00:00"
+
+  qsiprep_participant:
+    partition: "imgampereq"
+    mem_mb: 32000
+    time: "12:00:00"
+    gres: "--gres=gpu:1"
+
+  mriqc_participant:
+    partition: "imgcomputeq"
+    mem_mb: 12000
+    time: "04:00:00"
+
+  mriqc_group:
+    partition: "imgcomputeq"
+    mem_mb: 8000
+    time: "01:00:00"
+
+  hcp_postfreesurfer:
+    partition: "imgcomputeq"
+    mem_mb: 16000
+    time: "06:00:00"
+
+  coregister_t2_to_t1:
+    partition: "imgcomputeq"
+    mem_mb: 16000
+    time: "02:00:00"
+
+  mrs_processing:
+    partition: "imgcomputeq"
+    mem_mb: 8000
+    time: "02:00:00"
+
+  dcm2niix_convert_raw:
+    partition: "imgcomputeq"
+    mem_mb: 8000
+    time: "00:45:00"
+
+  organize_bids_raw:
+    partition: "imgcomputeq"
+    mem_mb: 4000
+    time: "00:30:00"
+
+  organize_bids_subject:
+    partition: "imgcomputeq"
+    mem_mb: 4000
+    time: "00:30:00"
+    time: "00:30:00"

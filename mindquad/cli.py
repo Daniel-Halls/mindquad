@@ -224,12 +224,37 @@ def check_if_lock_error(working_directory: Path) -> bool:
         return False
 
 
+def resolve_snakemake_executable() -> str:
+    """Resolve the snakemake executable, checking the current Python environment first.
+
+    Returns:
+        str: Absolute path to the snakemake binary, or 'snakemake' as fallback.
+    """
+    env_bin = Path(sys.executable).parent
+    env_snakemake = env_bin / "snakemake"
+    if env_snakemake.is_file() and os.access(env_snakemake, os.X_OK):
+        return str(env_snakemake)
+    return "snakemake"
+
+
+def get_subprocess_environment() -> dict:
+    """Return environment dictionary with current Python environment's bin prepended to PATH.
+
+    Returns:
+        dict: Environment variables dictionary suitable for subprocess.run.
+    """
+    sub_env = os.environ.copy()
+    env_bin = str(Path(sys.executable).parent)
+    sub_env["PATH"] = env_bin + os.pathsep + sub_env.get("PATH", "")
+    return sub_env
+
+
 def build_unlock_command(
     args: argparse.Namespace,
     snakefile_path: str,
     extra_arguments: Optional[List[str]] = None,
 ) -> List[str]:
-    """Build the Snakemake command to unlock the working directory.
+    """Construct the Snakemake unlock command.
 
     Args:
         args: Parsed command line arguments.
@@ -239,8 +264,9 @@ def build_unlock_command(
     Returns:
         List[str]: Snakemake unlock command components.
     """
+    snakemake_bin = resolve_snakemake_executable()
     unlock_command = [
-        "snakemake",
+        snakemake_bin,
         "--snakefile",
         snakefile_path,
         "--configfile",
@@ -285,7 +311,9 @@ def unlock_working_directory(
         flush=True,
     )
     try:
-        subprocess.run(unlock_command, check=True)
+        subprocess.run(
+            unlock_command, env=get_subprocess_environment(), check=True
+        )
         print("Successfully unlocked working directory.", flush=True)
         return True
     except subprocess.CalledProcessError as unlock_error:
@@ -312,8 +340,9 @@ def build_snakemake_command(
     Returns:
         List[str]: A list of strings representing the Snakemake command.
     """
+    snakemake_bin = resolve_snakemake_executable()
     command_components = [
-        "snakemake",
+        snakemake_bin,
         "--snakefile",
         snakefile_path,
         "--configfile",
@@ -381,8 +410,10 @@ def main() -> None:
         extra_arguments=extra_arguments,
     )
 
+    sub_env = get_subprocess_environment()
+
     try:
-        subprocess.run(command_to_run, check=True)
+        subprocess.run(command_to_run, env=sub_env, check=True)
     except subprocess.CalledProcessError as execution_error:
         if not args.unlock and check_if_lock_error(working_directory):
             print(
@@ -397,7 +428,7 @@ def main() -> None:
             )
             if unlock_succeeded:
                 try:
-                    subprocess.run(command_to_run, check=True)
+                    subprocess.run(command_to_run, env=sub_env, check=True)
                     return
                 except subprocess.CalledProcessError as retry_error:
                     print(

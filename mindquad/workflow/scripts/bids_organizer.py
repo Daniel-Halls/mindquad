@@ -208,6 +208,8 @@ class DICOMSeriesClassifier:
             return "bold"
         if "rest" in description and "dwi" not in description:
             return "bold"
+        if re.search(r"(?:^|[_ -])task(?:$|[_ -])", description) or "task-" in description:
+            return "bold"
         return None
 
     def _detect_dwi_suffix(self, description: str) -> Optional[str]:
@@ -249,43 +251,143 @@ class DICOMSeriesClassifier:
         Returns:
             BIDS suffix string or None.
         """
+        # Spin-echo EPI fieldmaps (blip-reversed / pepolar / topup / se_b0)
+        if any(
+            key in description
+            for key in ["pepolar", "se_b0", "se-b0", "seb0", "topup"]
+        ):
+            return "epi"
+        if "spin_echo" in description and any(
+            k in description for k in ["b0", "epi", "fmap", "reverse", "blip"]
+        ):
+            return "epi"
+
+        # Gradient echo / phase difference fieldmaps
         if "field_mapping" in description or "fmap" in description:
             if "phase" in description:
                 return "phasediff"
             if "mag" in description:
                 return "magnitude1"
+            if "epi" in description:
+                return "epi"
             return "fieldmap"
         return None
 
     def _extract_entities(
-        self, description: str, modality: BIDSModality
+        self,
+        description: str,
+        modality: BIDSModality,
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, str]:
-        """Extract BIDS entities such as task or direction from description.
+        """Extract BIDS entities such as task, acquisition, or direction.
 
         Args:
             description: Lowercase sequence description.
             modality: Classified BIDS modality.
+            metadata: Optional dictionary of JSON metadata sidecar.
 
         Returns:
             Dictionary of extracted entities.
         """
         entities: Dict[str, str] = {}
+        meta = metadata or {}
+
+        # Acquisition entity: check explicit acq tag first
+        acq_match = re.search(r"acq-([a-zA-Z0-9]+)", description)
+        if acq_match:
+            entities["acq"] = acq_match.group(1)
+        elif modality == BIDSModality.FMAP:
+            # Differentiate BOLD vs DWI fieldmaps
+            is_bold = any(k in description for k in ["bold", "fmri", "func"])
+            is_dwi = any(k in description for k in ["dwi", "diff", "dti"])
+            bids_guess = str(meta.get("BidsGuess", "")).lower()
+            if "dwi" in bids_guess:
+                is_dwi = True
+            if "bold" in bids_guess or "func" in bids_guess:
+                is_bold = True
+
+            if is_bold and not is_dwi:
+                entities["acq"] = "bold"
+            elif is_dwi and not is_bold:
+                entities["acq"] = "dwi"
 
         # Task entity for functional scans
         if modality == BIDSModality.FUNC:
             task_match = re.search(r"task-([a-zA-Z0-9]+)", description)
             if task_match:
                 entities["task"] = task_match.group(1)
-            elif "rest" in description:
-                entities["task"] = "rest"
             else:
-                entities["task"] = "task"
+                # Check for <name>_task or task_<name> e.g. AM_task
+                prefix_match = re.search(
+                    r"(?:task_([a-zA-Z0-9]+)|([a-zA-Z0-9]+)_task)",
+                    description,
+                )
+                if prefix_match:
+                    cand = (
+                        prefix_match.group(1) or prefix_match.group(2)
+                    )
+                    if cand.lower() not in [
+                        "bold",
+                        "fmri",
+                        "ep2d",
+                        "mri",
+                    ]:
+                        entities["task"] = cand
+                    else:
+                        entities["task"] = "task"
+                elif (
+                    "rest" in description
+                    or description.startswith("rs ")
+                    or " rs " in description
+                    or "_rs_" in description
+                ):
+                    entities["task"] = "rest"
+                else:
+                    entities["task"] = "task"
 
-        # Direction entity
-        if "dir-ap" in description or "_ap" in description:
+        # Direction entity: AP, PA, LR, RL
+        dir_match = re.search(r"dir-([a-zA-Z0-9]+)", description)
+        if dir_match:
+            entities["dir"] = dir_match.group(1).upper()
+        elif "dir-ap" in description or "_ap" in description or "dir_ap" in description:
             entities["dir"] = "AP"
-        elif "dir-pa" in description or "_pa" in description:
+        elif "dir-pa" in description or "_pa" in description or "dir_pa" in description:
             entities["dir"] = "PA"
+        elif "dir-lr" in description or "_lr" in description or "dir_lr" in description:
+            entities["dir"] = "LR"
+        elif "dir-rl" in description or "_rl" in description or "dir_rl" in description:
+            entities["dir"] = "RL"
+        else:
+            # Check BidsGuess in metadata
+            bids_guess = meta.get("BidsGuess")
+            if bids_guess:
+                guess_str = (
+                    " ".join(bids_guess)
+                    if isinstance(bids_guess, list)
+                    else str(bids_guess)
+                )
+                bg_match = re.search(r"_dir-([a-zA-Z0-9]+)", guess_str)
+                if bg_match:
+                    entities["dir"] = bg_match.group(1).upper()
+
+            # Fallback to PhaseEncodingDirection in metadata
+            if "dir" not in entities and meta.get("PhaseEncodingDirection"):
+                ped = str(meta.get("PhaseEncodingDirection")).strip().lower()
+                if ped == "j-":
+                    entities["dir"] = "AP"
+                elif ped == "j":
+                    entities["dir"] = "PA"
+                elif ped == "i-":
+                    entities["dir"] = "RL"
+                elif ped == "i":
+                    entities["dir"] = "LR"
+
+            # Fallback for pepolar tag if still unresolved
+            if "dir" not in entities:
+                if "pepolar=0" in description or "pepolar0" in description:
+                    entities["dir"] = "AP"
+                elif "pepolar=1" in description or "pepolar1" in description:
+                    entities["dir"] = "PA"
 
         return entities
 
@@ -307,32 +409,42 @@ class DICOMSeriesClassifier:
         # 1. Check Anatomical
         anat_suffix = self._detect_anat_suffix(description)
         if anat_suffix:
-            entities = self._extract_entities(description, BIDSModality.ANAT)
+            entities = self._extract_entities(
+                description, BIDSModality.ANAT, metadata
+            )
             return ScanClassification(BIDSModality.ANAT, anat_suffix, entities)
 
-        # 2. Check Diffusion
-        dwi_suffix = self._detect_dwi_suffix(description)
-        if dwi_suffix:
-            entities = self._extract_entities(description, BIDSModality.DWI)
-            return ScanClassification(BIDSModality.DWI, dwi_suffix, entities)
-
-        # 3. Check Functional
-        func_suffix = self._detect_func_suffix(description)
-        if func_suffix:
-            entities = self._extract_entities(description, BIDSModality.FUNC)
-            return ScanClassification(BIDSModality.FUNC, func_suffix, entities)
-
-        # 4. Check MRS
-        mrs_suffix = self._detect_mrs_suffix(description)
-        if mrs_suffix:
-            entities = self._extract_entities(description, BIDSModality.MRS)
-            return ScanClassification(BIDSModality.MRS, mrs_suffix, entities)
-
-        # 5. Check Fieldmap
+        # 2. Check Fieldmap (must precede DWI & FUNC to catch pepolar/se_b0 fieldmaps with dti/fmri in description)
         fmap_suffix = self._detect_fmap_suffix(description)
         if fmap_suffix:
-            entities = self._extract_entities(description, BIDSModality.FMAP)
+            entities = self._extract_entities(
+                description, BIDSModality.FMAP, metadata
+            )
             return ScanClassification(BIDSModality.FMAP, fmap_suffix, entities)
+
+        # 3. Check Diffusion
+        dwi_suffix = self._detect_dwi_suffix(description)
+        if dwi_suffix:
+            entities = self._extract_entities(
+                description, BIDSModality.DWI, metadata
+            )
+            return ScanClassification(BIDSModality.DWI, dwi_suffix, entities)
+
+        # 4. Check Functional
+        func_suffix = self._detect_func_suffix(description)
+        if func_suffix:
+            entities = self._extract_entities(
+                description, BIDSModality.FUNC, metadata
+            )
+            return ScanClassification(BIDSModality.FUNC, func_suffix, entities)
+
+        # 5. Check MRS
+        mrs_suffix = self._detect_mrs_suffix(description)
+        if mrs_suffix:
+            entities = self._extract_entities(
+                description, BIDSModality.MRS, metadata
+            )
+            return ScanClassification(BIDSModality.MRS, mrs_suffix, entities)
 
         self._logger.info("Unclassified sequence skipped: %s", stem)
         return None
@@ -483,7 +595,15 @@ class BIDSOrganizer:
         Returns:
             Sorted list of JSON file paths.
         """
-        return sorted(input_dir.glob("*.json"))
+        sidecars = set(input_dir.glob("*.json"))
+        sidecars.update(input_dir.rglob("*.json"))
+        filtered = [
+            p
+            for p in sidecars
+            if not p.name.startswith("dataset_description")
+            and not p.name.startswith("task-")
+        ]
+        return sorted(filtered)
 
     def _collect_candidates(self, input_dir: Path) -> List[SeriesCandidate]:
         """Collect and classify all candidate series from JSON sidecars.
@@ -602,6 +722,7 @@ class BIDSOrganizer:
         input_dir: Path,
         bids_root: Path,
         subject_label: str,
+        session_label: Optional[str] = None,
     ) -> int:
         """Organize converted subject files into BIDS subject folder.
 
@@ -609,6 +730,7 @@ class BIDSOrganizer:
             input_dir: Path to directory containing dcm2niix converted files.
             bids_root: Root directory of BIDS dataset.
             subject_label: Subject label (e.g. 'sub-001' or '001').
+            session_label: Optional session label (e.g. 'ses-01' or '01').
 
         Returns:
             Total count of organized files.
@@ -619,6 +741,16 @@ class BIDSOrganizer:
             else f"sub-{subject_label}"
         )
         subject_dir = bids_root / clean_sub
+
+        clean_ses = None
+        if session_label:
+            ses_str = str(session_label).strip()
+            if ses_str.lower().startswith("ses-"):
+                clean_ses = ses_str[4:]
+            elif ses_str.lower().startswith("ses_"):
+                clean_ses = ses_str[4:]
+            else:
+                clean_ses = ses_str
 
         candidates = self._collect_candidates(input_dir)
         if not candidates:
@@ -632,27 +764,125 @@ class BIDSOrganizer:
 
         total_transferred = 0
         for candidate in processed_candidates:
+            if clean_ses:
+                candidate.classification.entities["ses"] = clean_ses
+
             target_stem = self._filename_builder.build_bids_stem(
                 clean_sub, candidate.classification
             )
-            target_modality_dir = (
-                subject_dir / candidate.classification.modality.value
-            )
+            if clean_ses:
+                target_modality_dir = (
+                    subject_dir
+                    / f"ses-{clean_ses}"
+                    / candidate.classification.modality.value
+                )
+            else:
+                target_modality_dir = (
+                    subject_dir / candidate.classification.modality.value
+                )
 
             transferred = self._file_transfer.transfer_associated_files(
-                input_dir,
+                candidate.json_path.parent,
                 candidate.stem,
                 target_modality_dir,
                 target_stem,
             )
             total_transferred += transferred
 
+        # Populate IntendedFor in fieldmap JSON sidecars
+        self._populate_fieldmap_intended_for(subject_dir, clean_ses)
+
         self._logger.info(
-            "Finished organizing subject %s: %d files organized.",
+            "Finished organizing subject %s%s: %d files organized.",
             clean_sub,
+            f" ses-{clean_ses}" if clean_ses else "",
             total_transferred,
         )
         return total_transferred
+
+    def _populate_fieldmap_intended_for(
+        self, subject_dir: Path, session_label: Optional[str] = None
+    ) -> None:
+        """Inject IntendedFor field into fieldmap JSON sidecars.
+
+        Args:
+            subject_dir: Path to BIDS subject directory (e.g., sub-001).
+            session_label: Optional session label string without 'ses-' prefix.
+        """
+        session_dir = (
+            subject_dir / f"ses-{session_label}"
+            if session_label
+            else subject_dir
+        )
+        fmap_dir = session_dir / "fmap"
+        if not fmap_dir.exists():
+            return
+
+        func_dir = session_dir / "func"
+        func_targets: List[str] = []
+        if func_dir.exists():
+            seen_stems = set()
+            for ext in [".nii.gz", ".nii"]:
+                for nifti_file in sorted(func_dir.glob(f"*_bold{ext}")):
+                    stem = nifti_file.name.replace(".nii.gz", "").replace(".nii", "")
+                    if stem not in seen_stems:
+                        seen_stems.add(stem)
+                        rel_path = nifti_file.relative_to(subject_dir).as_posix()
+                        func_targets.append(rel_path)
+
+        dwi_dir = session_dir / "dwi"
+        dwi_targets: List[str] = []
+        if dwi_dir.exists():
+            seen_stems = set()
+            for ext in [".nii.gz", ".nii"]:
+                for nifti_file in sorted(dwi_dir.glob(f"*_dwi{ext}")):
+                    stem = nifti_file.name.replace(".nii.gz", "").replace(".nii", "")
+                    if stem not in seen_stems:
+                        seen_stems.add(stem)
+                        rel_path = nifti_file.relative_to(subject_dir).as_posix()
+                        dwi_targets.append(rel_path)
+
+        for json_file in sorted(fmap_dir.glob("*.json")):
+            try:
+                with open(json_file, "r", encoding="utf-8") as fh:
+                    meta = json.load(fh)
+            except Exception as exc:
+                self._logger.warning(
+                    "Failed to read %s for IntendedFor injection: %s",
+                    json_file,
+                    exc,
+                )
+                continue
+
+            fname = json_file.name
+            if "_acq-bold" in fname:
+                intended = func_targets
+            elif "_acq-dwi" in fname:
+                intended = dwi_targets
+            else:
+                if func_targets and not dwi_targets:
+                    intended = func_targets
+                elif dwi_targets and not func_targets:
+                    intended = dwi_targets
+                else:
+                    intended = func_targets or dwi_targets
+
+            if intended:
+                meta["IntendedFor"] = (
+                    intended[0] if len(intended) == 1 else intended
+                )
+                try:
+                    with open(json_file, "w", encoding="utf-8") as fh:
+                        json.dump(meta, fh, indent=2)
+                    self._logger.info(
+                        "Injected IntendedFor into %s -> %s",
+                        json_file.name,
+                        meta["IntendedFor"],
+                    )
+                except Exception as exc:
+                    self._logger.warning(
+                        "Failed to write %s: %s", json_file, exc
+                    )
 
 
 class BIDSOrganizerApp:
@@ -674,7 +904,7 @@ class BIDSOrganizerApp:
         parser.add_argument(
             "--input-dir",
             type=Path,
-            required=True,
+            default=None,
             help="Directory with dcm2niix converted NIfTI/JSON files.",
         )
         parser.add_argument(
@@ -688,6 +918,17 @@ class BIDSOrganizerApp:
             type=str,
             required=True,
             help="Subject label (e.g., 19081001 or sub-19081001).",
+        )
+        parser.add_argument(
+            "--session",
+            type=str,
+            default=None,
+            help="Optional BIDS session label (e.g., 01 or ses-01).",
+        )
+        parser.add_argument(
+            "--update-intended-for",
+            action="store_true",
+            help="Update IntendedFor in fieldmap sidecars without copying files.",
         )
         parser.add_argument(
             "--output-marker",
@@ -713,7 +954,38 @@ class BIDSOrganizerApp:
         parser = self.create_parser()
         parsed_args = parser.parse_args(args)
 
-        if not parsed_args.input_dir.exists():
+        clean_sub = (
+            parsed_args.subject
+            if parsed_args.subject.startswith("sub-")
+            else f"sub-{parsed_args.subject}"
+        )
+        clean_ses = None
+        if parsed_args.session:
+            ses_str = str(parsed_args.session).strip()
+            if ses_str.lower().startswith("ses-"):
+                clean_ses = ses_str[4:]
+            elif ses_str.lower().startswith("ses_"):
+                clean_ses = ses_str[4:]
+            else:
+                clean_ses = ses_str
+
+        subject_dir = parsed_args.bids_dir / clean_sub
+
+        if parsed_args.update_intended_for:
+            self._organizer._populate_fieldmap_intended_for(
+                subject_dir, clean_ses
+            )
+            if parsed_args.output_marker:
+                parsed_args.output_marker.parent.mkdir(
+                    parents=True, exist_ok=True
+                )
+                parsed_args.output_marker.write_text(
+                    "Updated IntendedFor.\n",
+                    encoding="utf-8",
+                )
+            return 0
+
+        if not parsed_args.input_dir or not parsed_args.input_dir.exists():
             logging.error(
                 "Input directory %s does not exist", parsed_args.input_dir
             )
@@ -725,6 +997,7 @@ class BIDSOrganizerApp:
             parsed_args.input_dir,
             parsed_args.bids_dir,
             parsed_args.subject,
+            parsed_args.session,
         )
 
         if parsed_args.output_marker:

@@ -31,7 +31,16 @@ subjects:
   - "subject_01"
   - "subject_02"
 
-# (Optional) Map raw directory names to BIDS participant labels (without the 'sub-' prefix).
+# (Optional) Map raw directory names to BIDS participant labels and optional sessions.
+# 1. Single-session / Cross-sectional:
+#    "subject_01": "01"
+# 2. Longitudinal multi-session (structured dict or "sub/ses" shorthand):
+#    "subject_01_sesA":
+#      subject: "01"
+#      session: "01"
+#    "subject_01_sesB":
+#      subject: "01"
+#      session: "02"
 subject_mapping:
   "subject_01": "01"
   "subject_02": "02"
@@ -53,6 +62,9 @@ threads: 4
 # ---------------------------------------------------------
 # Tool Configurations
 # ---------------------------------------------------------
+# All processing modules are enabled by default (whenever the required modality data exists).
+# You do NOT need to specify `enabled: true`.
+# To selectively turn off a pipeline, simply add `enabled: false` to its block (e.g., `mrs: enabled: false`).
 
 dcm2niix:
   load: "" # Put where dcm2niix is

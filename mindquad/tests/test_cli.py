@@ -15,6 +15,7 @@ from mindquad.cli import (
     is_directory_locked,
     load_makefile_arguments,
     main,
+    resolve_snakemake_executable,
     unlock_working_directory,
 )
 
@@ -143,8 +144,8 @@ def test_build_unlock_command() -> None:
         snakefile_path=snakefile_path,
         extra_arguments=["--directory", "/custom/workdir"],
     )
-    assert command == [
-        "snakemake",
+    assert command[0] in ("snakemake", resolve_snakemake_executable())
+    assert command[1:] == [
         "--snakefile",
         snakefile_path,
         "--configfile",
@@ -172,8 +173,8 @@ def test_build_snakemake_command() -> None:
         snakefile_path=snakefile_path,
         extra_arguments=["--rerun-incomplete"],
     )
-    expected_command = [
-        "snakemake",
+    assert command[0] in ("snakemake", resolve_snakemake_executable())
+    assert command[1:] == [
         "--snakefile",
         snakefile_path,
         "--configfile",
@@ -186,7 +187,6 @@ def test_build_snakemake_command() -> None:
         "mtime",
         "--rerun-incomplete",
     ]
-    assert command == expected_command
 
 
 def test_unlock_working_directory_success() -> None:

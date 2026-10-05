@@ -20,7 +20,8 @@ dependencies = [
     "pyyaml>=5.4.0",
     "mriqc>=23.1.0",
     "qsiprep>=0.20.0",
-    "setuptools"
+    "setuptools",
+    "snakemake-executor-plugin-cluster-generic>=1.0.0"
 ]
 
 [project.optional-dependencies]

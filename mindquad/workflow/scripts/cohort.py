@@ -1,7 +1,7 @@
 """Study cohort and dataset format resolution module."""
 
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, Tuple
 
 
 class StudyCohort:
@@ -110,6 +110,53 @@ class StudyCohort:
                 return sorted(found_dirs)
         raise FileNotFoundError(f"No subjects found in {self.raw_data_dir}")
 
+    @staticmethod
+    def _sanitize_bids_label(label: str) -> str:
+        """Sanitize string to alphanumeric BIDS label without entity prefixes."""
+        label_str = str(label).strip()
+        for prefix in ("sub-", "sub_", "ses-", "ses_"):
+            if label_str.lower().startswith(prefix):
+                label_str = label_str[len(prefix):]
+        return label_str.replace("-", "").replace("_", "")
+
+    def get_subject_and_session(
+        self, raw_subject: str
+    ) -> Tuple[str, Optional[str]]:
+        """Resolve BIDS subject and optional session for a raw subject folder.
+
+        Args:
+            raw_subject: Raw subject directory name.
+
+        Returns:
+            Tuple of (sanitized_bids_subject, sanitized_bids_session_or_None).
+        """
+        mapping: Dict[str, Any] = self._config.get("subject_mapping") or {}
+        mapped = mapping.get(raw_subject)
+
+        subj_val = raw_subject
+        ses_val = None
+
+        if isinstance(mapped, dict):
+            subj_val = mapped.get("subject", raw_subject)
+            ses_val = mapped.get("session")
+        elif isinstance(mapped, str):
+            if "/" in mapped:
+                parts = mapped.split("/", 1)
+                subj_val = parts[0]
+                ses_val = parts[1]
+            else:
+                subj_val = mapped
+        elif mapped is not None:
+            subj_val = str(mapped)
+
+        clean_sub = self._sanitize_bids_label(str(subj_val))
+        clean_ses = (
+            self._sanitize_bids_label(str(ses_val))
+            if ses_val is not None and str(ses_val).strip()
+            else None
+        )
+        return clean_sub, clean_ses
+
     def get_bids_subject_label(self, raw_subject: str) -> str:
         """Map raw subject directory name to sanitized BIDS subject label.
 
@@ -119,24 +166,51 @@ class StudyCohort:
         Returns:
             Sanitized BIDS subject label (without 'sub-' prefix).
         """
-        mapping: Dict[str, Any] = self._config.get("subject_mapping", {})
-        mapped = mapping.get(raw_subject, raw_subject)
-        mapped_str = str(mapped)
-        if mapped_str.lower().startswith("sub-"):
-            mapped_str = mapped_str[4:]
-        elif mapped_str.lower().startswith("sub_"):
-            mapped_str = mapped_str[4:]
-        clean_label = mapped_str.replace("-", "").replace("_", "")
-        return clean_label
+        clean_sub, _ = self.get_subject_and_session(raw_subject)
+        return clean_sub
+
+    def get_bids_session_label(self, raw_subject: str) -> Optional[str]:
+        """Map raw subject directory name to sanitized BIDS session label.
+
+        Args:
+            raw_subject: Raw subject directory name.
+
+        Returns:
+            Sanitized BIDS session label (without 'ses-' prefix) or None.
+        """
+        _, clean_ses = self.get_subject_and_session(raw_subject)
+        return clean_ses
+
+    def get_raw_subjects_for_bids_subject(
+        self, bids_subject: str
+    ) -> List[str]:
+        """Find all raw subject folders corresponding to a BIDS subject label.
+
+        Args:
+            bids_subject: Sanitized BIDS subject identifier.
+
+        Returns:
+            List of raw subject folder names in cohort subjects.
+        """
+        clean_target = self._sanitize_bids_label(bids_subject)
+        return [
+            raw_name
+            for raw_name in self.subjects
+            if self.get_bids_subject_label(raw_name) == clean_target
+        ]
 
     @property
     def bids_subjects(self) -> List[str]:
-        """Return list of all BIDS subject labels (without sub- prefix).
+        """Return unique list of all BIDS subject labels (without sub- prefix).
 
         Returns:
-            List of sanitized BIDS subject identifiers.
+            List of unique sanitized BIDS subject identifiers in order of appearance.
         """
-        return [
-            self.get_bids_subject_label(subject_name)
-            for subject_name in self.subjects
-        ]
+        seen = set()
+        unique_bids_subjects: List[str] = []
+        for raw_name in self.subjects:
+            clean_sub = self.get_bids_subject_label(raw_name)
+            if clean_sub not in seen:
+                seen.add(clean_sub)
+                unique_bids_subjects.append(clean_sub)
+        return unique_bids_subjects

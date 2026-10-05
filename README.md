@@ -84,10 +84,11 @@ A template configuration file (`config_template.yaml`) is provided in the root o
 | `tmp_dir` | String | No | Temporary directory for pipeline scratch data (Default: `.tmp`). |
 | `threads` | Integer | No | Global fallback limit for CPU cores across all rules (Default: `2`). |
 | `subjects` | List | No | Explicit list of subject folder names to process. If empty, auto-discovers all non-hidden folders in `raw_data_dir`. |
-| `subject_mapping`| Dict | No | Maps raw subject folder names to desired BIDS participant labels (without `sub-`). |
+| `subject_mapping`| Dict | No | Maps raw subject folder names to desired BIDS participant labels (without `sub-`). Supports longitudinal sessions: e.g. `raw_sesA: {subject: "01", session: "01"}` or `"01/ses-01"`. |
 
 ### Tool-Specific Blocks
-Each tool has its own configuration block (e.g., `mriqc:`, `fastsurfer:`). Common options across tools include:
+Each tool has its own configuration block (e.g., `mriqc:`, `fastsurfer:`, `mrs:`). Common options across tools include:
+- `enabled`: (Boolean) Enable or disable this module (Default: `true`). All modules are enabled by default; you only need to set `enabled: false` if you explicitly wish to turn a tool off (e.g. `mrs: enabled: false`).
 - `threads`: (Integer) Override the global core limit for this specific tool.
 - `args`: (String) Extra CLI arguments appended directly to the tool's execution command.
 - `module`: (String) Name of the HPC module to load (if applicable).
@@ -128,10 +129,17 @@ mindquad -c /path/to/config.yaml -n 8 -m extra_args.yaml
 ### Running on an HPC Cluster (SLURM)
 To run the full pipeline on a cluster, you can use the `-s` or `--submit` flag to pass a Snakemake profile. This allows Snakemake to act as an orchestrator, submitting individual pipeline steps as separate SLURM jobs!
 
+A template SLURM profile is provided in `slurm_config_template.yaml` (and pre-configured in `profiles/slurm/`):
+
 ```bash
+# Option A: Run directly using the included local profile
+mindquad -c /path/to/config.yaml -s profiles/slurm
+
+# Option B: Install as your default global Snakemake SLURM profile
+mkdir -p ~/.config/snakemake/slurm
+cp slurm_config_template.yaml ~/.config/snakemake/slurm/config.yaml
 mindquad -c /path/to/config.yaml -s slurm
 ```
-*(Ensure you have a `.config/snakemake/slurm` profile configured for your specific HPC environment).*
 
 ---
 
@@ -141,6 +149,36 @@ mindquad -c /path/to/config.yaml -s slurm
 You do not need to manually configure the pipeline to skip modules if your dataset is missing modalities. Mindquad uses **Snakemake Checkpoints** at the BIDS conversion step. 
 
 The pipeline will automatically pause, scan the generated BIDS directories for each subject, and dynamically turn off downstream pipelines if the data doesn't exist. For example, if a subject has no `dwi/` folder, QSIPrep is automatically omitted for that subject. If the dataset has no `mrs/` folder, the MRS pipeline is completely skipped!
+
+### Module Toggles & Selective Execution (`enabled: false`)
+By default, **all modules are enabled** whenever the corresponding imaging data is present in your dataset. You do **not** need to specify `enabled: true` in your configuration.
+
+If you wish to selectively turn off a specific pipeline, simply add `enabled: false` to its block:
+
+```yaml
+# Example: FastSurfer, fMRIPrep, and QSIPrep will run by default.
+# Only MRS is explicitly turned off here:
+mrs:
+  enabled: false
+```
+
+### Longitudinal Studies & Session Mapping
+For multi-session or longitudinal studies, Mindquad maps separate raw acquisition folders to common BIDS participant labels and `ses-<label>` subfolders:
+
+```yaml
+subject_mapping:
+  "VNS001_A":
+    subject: "VNS001"
+    session: "01"
+  "VNS001_S":
+    subject: "VNS001"
+    session: "02"
+```
+
+The pipeline automatically:
+1. Converts each raw folder and organizes files into `sub-VNS001/ses-01/` and `sub-VNS001/ses-02/`.
+2. Embeds standard `_ses-01_` / `_ses-02_` entities into the NIfTI filenames according to BIDS v1.9 specifications.
+3. Groups sessions under the participant label so downstream tools (FastSurfer, fMRIPrep, QSIPrep, MRIQC) process both sessions seamlessly.
 
 ### Pre-existing BIDS Ingestion (Auto-Skip `dcm2niix`)
 If your data has already been converted to BIDS format (e.g. from an earlier run or OpenNeuro), Mindquad detects this automatically (by checking for `dataset_description.json` or `sub-*/` modality directories) or via `is_bids: true` in your configuration. The `dcm2niix` conversion and BIDS reorganization steps are completely skipped, and all downstream pipelines run directly against the existing BIDS data without duplicating files.

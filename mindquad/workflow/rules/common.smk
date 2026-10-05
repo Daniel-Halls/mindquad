@@ -55,6 +55,23 @@ def get_bids_dir() -> str:
     return str((Path(get_output_dir()) / config.get("bids_dir", "bids")).resolve())
 
 
+def is_pipeline_enabled(name: str) -> bool:
+    """Check if a pipeline module is enabled in configuration.
+
+    Args:
+        name: Module name (e.g., 'mriqc', 'fastsurfer', 'fmriprep', 'qsiprep', 'mrs', 'hcp').
+
+    Returns:
+        bool: True if module is enabled (defaults to True unless explicitly disabled).
+    """
+    sec = config.get(name)
+    if sec is False:
+        return False
+    if isinstance(sec, dict):
+        return bool(sec.get("enabled", True))
+    return True
+
+
 def get_derivatives_dir() -> str:
     """Return the root derivatives directory from configuration."""
     return str(Path(get_output_dir()).resolve() / config.get("derivatives_dir", "derivatives"))
@@ -77,7 +94,7 @@ def get_tmp_dir() -> str:
 
 def get_mriqc_modalities() -> str:
     """Return space-separated list of MRIQC modalities from config."""
-    modalities = config.get("mriqc", {}).get(
+    modalities = (config.get("mriqc") or {}).get(
         "modalities", ["T1w", "bold"]
     )
     if isinstance(modalities, str):
@@ -87,18 +104,18 @@ def get_mriqc_modalities() -> str:
 
 def get_mriqc_threads() -> int:
     """Return configured MRIQC thread count."""
-    return int(config.get("mriqc", {}).get("threads", 2))
+    return int((config.get("mriqc") or {}).get("threads", 2))
 
 
 def get_bids_threads() -> int:
     """Return configured BIDS setup thread count."""
-    return int(config.get("bids", {}).get("threads", 2))
+    return int((config.get("bids") or {}).get("threads", 2))
 
 
 def get_mriqc_extra_args() -> str:
     """Return extra CLI flags for MRIQC from config."""
     default_args = "--verbose-reports --no-sub --notrack"
-    return str(config.get("mriqc", {}).get("args", default_args))
+    return str((config.get("mriqc") or {}).get("args", default_args))
 
 
 def get_subjects() -> List[str]:
@@ -145,7 +162,7 @@ def get_raw_subject_dir(wildcards: Any) -> str:
     """
     cohort = StudyCohort(config)
     subject_wildcard = wildcards.subject
-    mapping: Dict[str, Any] = config.get("subject_mapping", {})
+    mapping: Dict[str, Any] = config.get("subject_mapping") or {}
     reverse_mapping = {
         cohort.get_bids_subject_label(sub_item): sub_item
         for sub_item in cohort.subjects
@@ -160,6 +177,52 @@ def get_raw_subject_dir(wildcards: Any) -> str:
     return str(candidate)
 
 
+def get_raw_dir_by_name(wildcards: Any) -> str:
+    """Resolve raw acquisition directory path for a raw_subject wildcard.
+
+    Args:
+        wildcards: Snakemake rule wildcards containing 'raw_subject'.
+
+    Returns:
+        Path to raw acquisition directory.
+    """
+    cohort = StudyCohort(config)
+    raw_name = wildcards.raw_subject
+    candidate = cohort.raw_data_dir / raw_name
+    if not candidate.exists() and (cohort.raw_data_dir / f"sub-{raw_name}").exists():
+        return str(cohort.raw_data_dir / f"sub-{raw_name}")
+    return str(candidate)
+
+
+def get_raw_session_label(raw_name: str) -> Optional[str]:
+    """Get the session label for a raw subject directory name.
+
+    Args:
+        raw_name: Raw subject directory name.
+
+    Returns:
+        Session label string without 'ses-' or None.
+    """
+    cohort = StudyCohort(config)
+    return cohort.get_bids_session_label(raw_name)
+
+
+def get_organized_raw_markers_for_subject(wildcards: Any) -> List[str]:
+    """Get list of .bids_organized markers for all raw directories of this subject.
+
+    Args:
+        wildcards: Snakemake rule wildcards containing 'subject'.
+
+    Returns:
+        List of paths to .bids_organized marker files.
+    """
+    cohort = StudyCohort(config)
+    raw_names = cohort.get_raw_subjects_for_bids_subject(wildcards.subject)
+    work_dir = get_work_dir()
+    return [f"{work_dir}/raw/{raw_name}/.bids_organized" for raw_name in raw_names]
+
+
+
 def get_fastsurfer_dir() -> str:
     """Return the FastSurfer derivatives output directory path."""
     return str(Path(get_derivatives_dir()) / "fastsurfer")
@@ -167,23 +230,23 @@ def get_fastsurfer_dir() -> str:
 
 def get_fastsurfer_threads() -> int:
     """Return configured FastSurfer thread count capped at 2."""
-    configured_threads = int(config.get("fastsurfer", {}).get("threads", 2))
+    configured_threads = int((config.get("fastsurfer") or {}).get("threads", 2))
     return configured_threads
 
 
 def get_fastsurfer_device() -> str:
     """Return configured computing device for FastSurfer."""
-    return str(config.get("fastsurfer", {}).get("device", "cpu"))
+    return str((config.get("fastsurfer") or {}).get("device", "cpu"))
 
 
 def get_fastsurfer_license() -> str:
     """Return configured FreeSurfer license file path if provided."""
-    configured_license = config.get("fastsurfer", {}).get("fs_license")
+    configured_license = (config.get("fastsurfer") or {}).get("fs_license")
     if not configured_license:
         configured_license = (
             config.get("fs_license")
-            or config.get("fmriprep", {}).get("fs_license")
-            or config.get("qsiprep", {}).get("fs_license")
+            or (config.get("fmriprep") or {}).get("fs_license")
+            or (config.get("qsiprep") or {}).get("fs_license")
             or ""
         )
     return str(configured_license)
@@ -191,7 +254,7 @@ def get_fastsurfer_license() -> str:
 
 def get_fastsurfer_extra_args() -> str:
     """Return extra CLI flags for FastSurfer from configuration."""
-    return str(config.get("fastsurfer", {}).get("args", ""))
+    return str((config.get("fastsurfer") or {}).get("args", ""))
 
 
 def get_t1w_image(wildcards: Any) -> str:
@@ -262,18 +325,18 @@ def get_fmriprep_dir() -> str:
 
 def get_fmriprep_threads() -> int:
     """Return configured fMRIPrep thread count capped at 2."""
-    configured_threads = int(config.get("fmriprep", {}).get("threads", 2))
+    configured_threads = int((config.get("fmriprep") or {}).get("threads", 2))
     return configured_threads
 
 
 def get_fmriprep_mem_mb() -> int:
     """Return configured fMRIPrep memory limit in MB."""
-    return int(config.get("fmriprep", {}).get("mem_mb", 8000))
+    return int((config.get("fmriprep") or {}).get("mem_mb", 8000))
 
 
 def get_fmriprep_output_spaces() -> str:
     """Return space-separated string of fMRIPrep output spaces from config."""
-    spaces = config.get("fmriprep", {}).get(
+    spaces = (config.get("fmriprep") or {}).get(
         "output_spaces", ["MNI152NLin2009cAsym:res-2", "fsaverage5"]
     )
     if isinstance(spaces, list):
@@ -283,12 +346,12 @@ def get_fmriprep_output_spaces() -> str:
 
 def get_fmriprep_cifti_output() -> str:
     """Return configured CIFTI output resolution for fMRIPrep."""
-    return str(config.get("fmriprep", {}).get("cifti_output", "91k"))
+    return str((config.get("fmriprep") or {}).get("cifti_output", "91k"))
 
 
 def get_fmriprep_fs_subjects_dir() -> str:
     """Return FreeSurfer/FastSurfer subjects directory for fMRIPrep."""
-    fs_dir = config.get("fmriprep", {}).get("fs_subjects_dir", get_fastsurfer_dir())
+    fs_dir = (config.get("fmriprep") or {}).get("fs_subjects_dir", get_fastsurfer_dir())
     if not __import__("pathlib").Path(fs_dir).is_absolute():
         fs_dir = str(__import__("pathlib").Path(get_output_dir()) / fs_dir)
     return str(__import__("pathlib").Path(fs_dir).resolve())
@@ -297,14 +360,14 @@ def get_fmriprep_fs_subjects_dir() -> str:
 def get_fmriprep_fs_license() -> str:
     """Return FreeSurfer license file path for fMRIPrep."""
     return str(
-        config.get("fmriprep", {}).get("fs_license", get_fastsurfer_license())
+        (config.get("fmriprep") or {}).get("fs_license", get_fastsurfer_license())
     )
 
 
 def get_fmriprep_extra_args() -> str:
     """Return extra CLI flags for fMRIPrep from configuration."""
     default_args = "--skip-bids-validation --notrack"
-    return str(config.get("fmriprep", {}).get("args", default_args))
+    return str((config.get("fmriprep") or {}).get("args", default_args))
 
 
 def get_qsiprep_dir() -> str:
@@ -314,38 +377,38 @@ def get_qsiprep_dir() -> str:
 
 def get_qsiprep_threads() -> int:
     """Return configured QSIPrep thread count capped at 2."""
-    configured_threads = int(config.get("qsiprep", {}).get("threads", 2))
+    configured_threads = int((config.get("qsiprep") or {}).get("threads", 2))
     return configured_threads
 
 
 def get_qsiprep_mem_mb() -> int:
     """Return configured QSIPrep memory limit in MB."""
-    return int(config.get("qsiprep", {}).get("mem_mb", 8000))
+    return int((config.get("qsiprep") or {}).get("mem_mb", 8000))
 
 
 def get_qsiprep_output_resolution() -> str:
     """Return configured QSIPrep output DWI resolution."""
-    return str(config.get("qsiprep", {}).get("output_resolution", "1.5"))
+    return str((config.get("qsiprep") or {}).get("output_resolution", "1.5"))
 
 
 def get_qsiprep_denoise_method() -> str:
     """Return configured QSIPrep DWI denoising method."""
-    return str(config.get("qsiprep", {}).get("denoise_method", "dwidenoise"))
+    return str((config.get("qsiprep") or {}).get("denoise_method", "dwidenoise"))
 
 
 def get_qsiprep_unringing_method() -> str:
     """Return configured QSIPrep Gibbs unringing method."""
-    return str(config.get("qsiprep", {}).get("unringing_method", "mrdegibbs"))
+    return str((config.get("qsiprep") or {}).get("unringing_method", "mrdegibbs"))
 
 
 def get_qsiprep_separate_all_dwis() -> bool:
     """Return True if QSIPrep should process DWI runs separately."""
-    return bool(config.get("qsiprep", {}).get("separate_all_dwis", False))
+    return bool((config.get("qsiprep") or {}).get("separate_all_dwis", False))
 
 
 def get_qsiprep_fs_subjects_dir() -> str:
     """Return FreeSurfer/FastSurfer subjects directory for QSIPrep."""
-    fs_dir = config.get("qsiprep", {}).get("fs_subjects_dir", get_fastsurfer_dir())
+    fs_dir = (config.get("qsiprep") or {}).get("fs_subjects_dir", get_fastsurfer_dir())
     if not __import__("pathlib").Path(fs_dir).is_absolute():
         fs_dir = str(__import__("pathlib").Path(get_output_dir()) / fs_dir)
     return str(__import__("pathlib").Path(fs_dir).resolve())
@@ -354,14 +417,14 @@ def get_qsiprep_fs_subjects_dir() -> str:
 def get_qsiprep_fs_license() -> str:
     """Return FreeSurfer license file path for QSIPrep."""
     return str(
-        config.get("qsiprep", {}).get("fs_license", get_fastsurfer_license())
+        (config.get("qsiprep") or {}).get("fs_license", get_fastsurfer_license())
     )
 
 
 def get_qsiprep_eddy_config() -> str:
     """Return path to QSIPrep eddy parameters JSON file."""
     # First check if explicitly defined in config
-    configured = config.get("qsiprep", {}).get("eddy_config")
+    configured = (config.get("qsiprep") or {}).get("eddy_config")
     if configured:
         return str(configured)
     
@@ -375,7 +438,7 @@ def get_qsiprep_eddy_config() -> str:
 def get_qsiprep_extra_args() -> str:
     """Return extra CLI flags for QSIPrep from configuration."""
     default_args = "--skip-bids-validation --notrack"
-    return str(config.get("qsiprep", {}).get("args", default_args))
+    return str((config.get("qsiprep") or {}).get("args", default_args))
 
 def get_coregistration_dir() -> str:
     """Return the Coregistration derivatives output directory path."""
@@ -385,34 +448,34 @@ def get_coregistration_dir() -> str:
 def get_coregistration_threads() -> int:
     """Return configured Coregistration thread count capped at 2."""
     configured_threads = int(
-        config.get("coregistration", {}).get("threads", 2)
+        (config.get("coregistration") or {}).get("threads", 2)
     )
     return configured_threads
 
 
 def get_coregistration_tool() -> str:
     """Return configured coregistration backend tool ('dipy' or 'ants')."""
-    return str(config.get("coregistration", {}).get("tool", "dipy"))
+    return str((config.get("coregistration") or {}).get("tool", "dipy"))
 
 
 def get_coregistration_metric() -> str:
     """Return configured similarity metric for diffeomorphic registration."""
-    return str(config.get("coregistration", {}).get("metric", "CC"))
+    return str((config.get("coregistration") or {}).get("metric", "CC"))
 
 
 def get_coregistration_transform_type() -> str:
     """Return configured transformation model for coregistration."""
-    return str(config.get("coregistration", {}).get("transform_type", "syn"))
+    return str((config.get("coregistration") or {}).get("transform_type", "syn"))
 
 
 def get_coregistration_step_length() -> float:
     """Return configured optimization step length for coregistration."""
-    return float(config.get("coregistration", {}).get("step_length", 0.25))
+    return float((config.get("coregistration") or {}).get("step_length", 0.25))
 
 
 def get_coregistration_extra_args() -> str:
     """Return extra CLI flags for coregistration from configuration."""
-    return str(config.get("coregistration", {}).get("args", ""))
+    return str((config.get("coregistration") or {}).get("args", ""))
 
 
 def get_coregistered_t2w_image(wildcards: Any) -> str:
@@ -441,68 +504,68 @@ def get_hcp_dir() -> str:
 
 def get_hcp_threads() -> int:
     """Return configured HCP processing thread count capped at 2."""
-    configured_threads = int(config.get("hcp", {}).get("threads", 2))
+    configured_threads = int((config.get("hcp") or {}).get("threads", 2))
     return configured_threads
 
 
 def get_hcp_processing_mode() -> str:
     """Return configured HCP processing mode ('HCPStyleData' or 'LegacyStyleData')."""
-    return str(config.get("hcp", {}).get("processing_mode", "HCPStyleData"))
+    return str((config.get("hcp") or {}).get("processing_mode", "HCPStyleData"))
 
 
 def get_hcp_reg_name() -> str:
     """Return configured HCP surface registration name ('MSMSulc' or 'FS')."""
-    return str(config.get("hcp", {}).get("reg_name", "MSMSulc"))
+    return str((config.get("hcp") or {}).get("reg_name", "MSMSulc"))
 
 
 def get_hcp_grayordinates_res() -> int:
     """Return configured HCP grayordinates resolution in mm."""
-    return int(config.get("hcp", {}).get("grayordinates_res", 2))
+    return int((config.get("hcp") or {}).get("grayordinates_res", 2))
 
 
 def get_hcp_hires_mesh() -> int:
     """Return configured high-resolution standard mesh vertex count in k."""
-    return int(config.get("hcp", {}).get("hires_mesh", 164))
+    return int((config.get("hcp") or {}).get("hires_mesh", 164))
 
 
 def get_hcp_low_res_mesh() -> int:
     """Return configured low-resolution standard mesh vertex count in k."""
-    return int(config.get("hcp", {}).get("low_res_mesh", 32))
+    return int((config.get("hcp") or {}).get("low_res_mesh", 32))
 
 
 def get_hcp_thickness_regression() -> str:
     """Return configured HCP thickness regression method ('BOTH', 'OLD', 'NEW')."""
-    return str(config.get("hcp", {}).get("thickness_regression", "BOTH"))
+    return str((config.get("hcp") or {}).get("thickness_regression", "BOTH"))
 
 
 def get_hcp_surf_atlas_dir() -> str:
     """Return configured surface atlas templates directory path if set."""
-    return str(config.get("hcp", {}).get("surf_atlas_dir", ""))
+    return str((config.get("hcp") or {}).get("surf_atlas_dir", ""))
 
 
 def get_hcp_grayordinates_dir() -> str:
     """Return configured grayordinates templates directory path if set."""
-    return str(config.get("hcp", {}).get("grayordinates_dir", ""))
+    return str((config.get("hcp") or {}).get("grayordinates_dir", ""))
 
 
 def get_hcp_subcort_gray_labels() -> str:
     """Return configured FreeSurfer subcortical gray label LUT path if set."""
-    return str(config.get("hcp", {}).get("subcort_gray_labels", ""))
+    return str((config.get("hcp") or {}).get("subcort_gray_labels", ""))
 
 
 def get_hcp_freesurfer_labels() -> str:
     """Return configured FreeSurfer all labels LUT path if set."""
-    return str(config.get("hcp", {}).get("freesurfer_labels", ""))
+    return str((config.get("hcp") or {}).get("freesurfer_labels", ""))
 
 
 def get_hcp_ref_myelin_maps() -> str:
     """Return configured group myelin reference map path if set."""
-    return str(config.get("hcp", {}).get("ref_myelin_maps", ""))
+    return str((config.get("hcp") or {}).get("ref_myelin_maps", ""))
 
 
 def get_hcp_extra_args() -> str:
     """Return extra CLI flags for HCP PostFreeSurfer from configuration."""
-    return str(config.get("hcp", {}).get("args", ""))
+    return str((config.get("hcp") or {}).get("args", ""))
 
 
 def get_mrs_dir() -> str:
@@ -512,23 +575,23 @@ def get_mrs_dir() -> str:
 
 def get_mrs_threads() -> int:
     """Return configured MRS thread count capped at 2."""
-    configured_threads = int(config.get("mrs", {}).get("threads", 2))
+    configured_threads = int((config.get("mrs") or {}).get("threads", 2))
     return configured_threads
 
 
 def get_mrs_basis() -> str:
     """Return configured basis set path for MRS fitting."""
-    return str(config.get("mrs", {}).get("basis", ""))
+    return str((config.get("mrs") or {}).get("basis", ""))
 
 
 def get_mrs_fit_algorithm() -> str:
     """Return configured MRS fitting algorithm ('Newton' or 'MH')."""
-    return str(config.get("mrs", {}).get("fit_algorithm", "Newton"))
+    return str((config.get("mrs") or {}).get("fit_algorithm", "Newton"))
 
 
 def get_mrs_ppm_range() -> str:
     """Return space-separated min and max ppm range for MRS fitting."""
-    ppm = config.get("mrs", {}).get("ppm_range", [0.2, 4.2])
+    ppm = (config.get("mrs") or {}).get("ppm_range", [0.2, 4.2])
     if isinstance(ppm, (list, tuple)) and len(ppm) == 2:
         return f"{ppm[0]} {ppm[1]}"
     return str(ppm)
@@ -536,7 +599,7 @@ def get_mrs_ppm_range() -> str:
 
 def get_mrs_ppm_min() -> float:
     """Return lower bound ppm value for MRS fitting."""
-    ppm = config.get("mrs", {}).get("ppm_range", [0.2, 4.2])
+    ppm = (config.get("mrs") or {}).get("ppm_range", [0.2, 4.2])
     if isinstance(ppm, (list, tuple)) and len(ppm) >= 1:
         return float(ppm[0])
     return 0.2
@@ -544,7 +607,7 @@ def get_mrs_ppm_min() -> float:
 
 def get_mrs_ppm_max() -> float:
     """Return upper bound ppm value for MRS fitting."""
-    ppm = config.get("mrs", {}).get("ppm_range", [0.2, 4.2])
+    ppm = (config.get("mrs") or {}).get("ppm_range", [0.2, 4.2])
     if isinstance(ppm, (list, tuple)) and len(ppm) >= 2:
         return float(ppm[1])
     return 4.2
@@ -552,17 +615,17 @@ def get_mrs_ppm_max() -> float:
 
 def get_mrs_baseline_order() -> int:
     """Return configured polynomial baseline order for MRS fitting."""
-    return int(config.get("mrs", {}).get("baseline_order", 2))
+    return int((config.get("mrs") or {}).get("baseline_order", 2))
 
 
 def get_mrs_internal_reference() -> str:
     """Return internal reference metabolite name (e.g. 'Cr', 'tCr')."""
-    return str(config.get("mrs", {}).get("internal_reference", "Cr"))
+    return str((config.get("mrs") or {}).get("internal_reference", "Cr"))
 
 
 def get_mrs_extra_args() -> str:
     """Return extra CLI flags for MRS processing from configuration."""
-    return str(config.get("mrs", {}).get("args", ""))
+    return str((config.get("mrs") or {}).get("args", ""))
 
 
 def get_mrs_svs_image(wildcards: Any) -> str:
@@ -676,7 +739,7 @@ def _extract_load_components(load_val: Any) -> Tuple[str, str]:
 
 def get_tool_env_cmd(tool_name: str) -> str:
     """Return environment preparation command (e.g., module load) for a tool."""
-    tool_cfg = config.get(tool_name, {})
+    tool_cfg = config.get(tool_name) or {}
     load_val = tool_cfg.get("load") or tool_cfg.get("module")
 
     module_str, sif_path = _extract_load_components(load_val)
@@ -684,7 +747,7 @@ def get_tool_env_cmd(tool_name: str) -> str:
     cmd_parts = []
 
     if sif_path and sif_path.endswith(".sif"):
-        container_load = config.get("container", {}).get("load")
+        container_load = (config.get("container") or {}).get("load")
         if container_load:
             cmd_parts.append(
                 f"module load {container_load} 2>/dev/null || true"
@@ -724,7 +787,7 @@ def get_tool_env_cmd(tool_name: str) -> str:
 def get_tool_executable(tool_name: str, default_bin: str) -> str:
     """Return the executable string, auto-wrapping in container engine if a .sif is provided,
     or returning custom script/executable if configured."""
-    tool_cfg = config.get(tool_name, {})
+    tool_cfg = config.get(tool_name) or {}
     custom_exe = (
         tool_cfg.get("executable")
         or tool_cfg.get("script")
@@ -738,7 +801,7 @@ def get_tool_executable(tool_name: str, default_bin: str) -> str:
 
     if target_path:
         if target_path.endswith(".sif"):
-            engine_cmd = config.get("container", {}).get(
+            engine_cmd = (config.get("container") or {}).get(
                 "command", "singularity"
             )
             out_dir = Path(get_output_dir()).resolve()

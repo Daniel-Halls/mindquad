@@ -1,0 +1,156 @@
+# ==============================================================================
+# Mindquad SLURM Profile Configuration Template
+# ==============================================================================
+# This template configures Snakemake to submit individual Mindquad pipeline
+# rules as independent SLURM jobs on your High-Performance Computing (HPC) cluster.
+#
+# USAGE OPTIONS:
+# ------------------------------------------------------------------------------
+# Option 1: Global profile (Recommended)
+#   mkdir -p ~/.config/snakemake/slurm
+#   cp slurm_config_template.yaml ~/.config/snakemake/slurm/config.yaml
+#   mindquad -c config.yaml -s slurm
+#
+# Option 2: Local repo profile
+#   mindquad -c config.yaml -s profiles/slurm
+#
+# Option 3: Custom profile directory
+#   mkdir -p my_hpc_profile
+#   cp slurm_config_template.yaml my_hpc_profile/config.yaml
+#   # edit my_hpc_profile/config.yaml as needed
+#   mindquad -c config.yaml -s my_hpc_profile
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# SLURM Job Submission (Snakemake 8.x / 9.x cluster-generic executor)
+# ------------------------------------------------------------------------------
+# Format arguments are dynamically populated by Snakemake:
+#   {threads}          - CPU threads requested by the rule
+#   {resources.mem_mb} - RAM allocation in MB
+#   {resources.time}   - Job walltime (HH:MM:SS)
+#   {resources.partition} - SLURM partition / queue
+#   {resources.gres}   - GPU / generic resources (e.g., --gres=gpu:1)
+# ------------------------------------------------------------------------------
+executor: cluster-generic
+cluster-generic-submit-cmd: >-
+  mkdir -p logs/slurm &&
+  sbatch
+  --parsable
+  --job-name="mq.{rule}.{wildcards}"
+  --output="logs/slurm/%j-{rule}.out"
+  --error="logs/slurm/%j-{rule}.err"
+  --cpus-per-task={threads}
+  --mem={resources.mem_mb}M
+  --time={resources.time}
+  --partition={resources.partition}
+  {resources.account}
+  {resources.qos}
+  {resources.gres}
+cluster-generic-cancel-cmd: scancel
+
+# ------------------------------------------------------------------------------
+# Cluster Scheduler Concurrency & Throttling
+# ------------------------------------------------------------------------------
+# Maximum number of concurrent jobs to keep in the SLURM queue at any time
+jobs: 50
+
+# Rate limits to prevent overwhelming the SLURM slurmctld controller daemon
+max-jobs-per-second: 10
+max-status-checks-per-second: 10
+
+# Wait time in seconds for output files to appear on shared network filesystems
+# (Crucial for distributed filesystems like GPFS, Lustre, or NFS)
+latency-wait: 60
+
+# Number of times to automatically retry a failed job before halting
+restart-times: 0
+
+# Continue processing other independent subjects/steps if one job fails
+keep-going: true
+
+# Automatically re-run jobs whose output files were partially created or corrupted
+rerun-incomplete: true
+
+# Echo the exact shell commands executed inside each SLURM job output log
+printshellcmds: true
+
+# ------------------------------------------------------------------------------
+# Default Resources (Applied to any rule unless explicitly overridden below)
+# ------------------------------------------------------------------------------
+default-resources:
+  - account=""              # Optional: e.g. "--account=my_project" (leave blank "" if not required)
+  - qos=""                  # Optional: e.g. "--qos=my_qos" (leave blank "" if not required)
+  - partition="standard"     # Default SLURM partition / queue name
+  - mem_mb=8000              # Default RAM in MB (8 GB)
+  - time="02:00:00"          # Default max walltime (HH:MM:SS)
+  - gres=""                  # Default: no GPU requested
+
+# ------------------------------------------------------------------------------
+# Per-Rule Resource Overrides
+# ------------------------------------------------------------------------------
+# Tailor CPU, memory, time, partition, and GPU allocations to specific pipeline stages.
+set-resources:
+  # FastSurfer: Deep learning whole-brain segmentation and cortical reconstruction
+  fastsurfer_subject:
+    partition: "gpu"         # GPU partition recommended for FastSurfer inference
+    mem_mb: 16000
+    time: "03:00:00"
+    gres: "--gres=gpu:1"
+
+  # fMRIPrep: BOLD functional and anatomical preprocessing (Memory & CPU intensive)
+  fmriprep_participant:
+    partition: "standard"
+    mem_mb: 32000
+    time: "24:00:00"
+
+  # QSIPrep: Diffusion MRI preprocessing (GPU recommended for eddy_cuda)
+  qsiprep_participant:
+    partition: "gpu"         # GPU partition recommended for eddy current correction
+    mem_mb: 32000
+    time: "12:00:00"
+    gres: "--gres=gpu:1"
+
+  # MRIQC: Automated Quality Control
+  mriqc_participant:
+    partition: "standard"
+    mem_mb: 12000
+    time: "04:00:00"
+
+  mriqc_group:
+    partition: "standard"
+    mem_mb: 8000
+    time: "01:00:00"
+
+  # HCP PostFreeSurfer: Standard surface meshes and CIFTI grayordinates
+  hcp_postfreesurfer:
+    partition: "standard"
+    mem_mb: 16000
+    time: "06:00:00"
+
+  # Coregistration: T2w/FLAIR to T1w diffeomorphic alignment (DIPY / ANTs SyN)
+  coregister_t2_to_t1:
+    partition: "standard"
+    mem_mb: 16000
+    time: "02:00:00"
+
+  # MRS: Single Voxel Spectroscopy preprocessing, segmentation, and fitting
+  mrs_processing:
+    partition: "standard"
+    mem_mb: 8000
+    time: "02:00:00"
+
+  # BIDS Setup: Raw DICOM conversion and organization
+  dcm2niix_convert_raw:
+    partition: "imgcomputeq"
+    mem_mb: 8000
+    time: "00:45:00"
+
+  organize_bids_raw:
+    partition: "imgcomputeq"
+    mem_mb: 4000
+    time: "00:30:00"
+
+  organize_bids_subject:
+    partition: "imgcomputeq"
+    mem_mb: 4000
+    time: "00:30:00"

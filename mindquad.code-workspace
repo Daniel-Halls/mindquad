@@ -8,6 +8,9 @@
 		},
 		{
 			"path": "../../pilot/pilot_4"
+		},
+		{
+			"path": "../../VNS"
 		}
 	],
 	"settings": {}
