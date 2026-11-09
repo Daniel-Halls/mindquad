@@ -76,16 +76,65 @@ class StudyCohort:
 
         return False
 
+    def _resolve_configured_subjects(
+        self, configured_subjects: List[Any]
+    ) -> List[str]:
+        """Resolve configured subject entries to raw subject directory names.
+
+        When the dataset is not yet in BIDS format and a subject_mapping is
+        defined, entries in configured_subjects that specify BIDS subject IDs
+        (e.g., 'VNS001') are expanded to all matching raw acquisition folder
+        names (e.g., ['VNS001_A', 'VNS001_S']).
+
+        Parameters
+        ------------
+        configured_subjects: List[Any]
+            List of subject identifiers from configuration.
+
+        Returns
+        --------
+            List[str]: list of strings
+                Resolved list of raw subject directory identifiers.
+        """
+        raw_items = [str(subject_item) for subject_item in configured_subjects]
+        mapping: Dict[str, Any] = self._config.get("subject_mapping") or {}
+        if self.is_bids or not mapping:
+            return raw_items
+
+        resolved_subjects: List[str] = []
+        for item_str in raw_items:
+            if item_str in mapping:
+                if item_str not in resolved_subjects:
+                    resolved_subjects.append(item_str)
+                continue
+
+            clean_target = self._sanitize_bids_label(item_str)
+            matched_keys = [
+                str(map_key)
+                for map_key in mapping
+                if self.get_bids_subject_label(str(map_key)) == clean_target
+            ]
+            if matched_keys:
+                for map_key in matched_keys:
+                    if map_key not in resolved_subjects:
+                        resolved_subjects.append(map_key)
+            elif item_str not in resolved_subjects:
+                resolved_subjects.append(item_str)
+
+        return resolved_subjects
+
     @property
     def subjects(self) -> List[str]:
         """Retrieve list of subject folder names from config or filesystem.
 
-        Returns:
-            List of raw subject directory identifiers.
+        Returns
+        --------
+            List[str]: list of strings
+                List of raw subject directory identifiers.
         """
         configured_subjects = self._config.get("subjects")
         if configured_subjects:
-            return [str(subject_item) for subject_item in configured_subjects]
+            return self._resolve_configured_subjects(list(configured_subjects))
 
         if self.raw_data_dir.exists():
             if self.is_bids:

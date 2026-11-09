@@ -28,8 +28,11 @@ class BaseTest(unittest.TestCase):
         cls.tmp_root.mkdir(parents=True, exist_ok=True)
 
     def create_temp_dir(self) -> tempfile.TemporaryDirectory:
-        """Create temp directory inside project-local .tmp/."""
-        return tempfile.TemporaryDirectory(dir=str(self.tmp_root))
+        """Create temp directory inside project-local .tmp/ or fallback."""
+        try:
+            return tempfile.TemporaryDirectory(dir=str(self.tmp_root))
+        except (OSError, PermissionError):
+            return tempfile.TemporaryDirectory()
 
 
 class TestQSIPrepDenoiseMethod(unittest.TestCase):

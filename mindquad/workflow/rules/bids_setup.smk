@@ -88,6 +88,7 @@ else:
                 if get_raw_session_label(wildcards.raw_subject)
                 else ""
             ),
+            min_bold_volumes=(config.get("bids") or {}).get("min_bold_volumes", 15),
         threads: get_bids_threads()
         shell:
             """
@@ -96,6 +97,7 @@ else:
                 --bids-dir "{params.bids_dir}" \
                 --subject "{params.subject}" \
                 {params.session_arg} \
+                --min-bold-volumes {params.min_bold_volumes} \
                 --output-marker "{output.raw_marker}"
             """
 

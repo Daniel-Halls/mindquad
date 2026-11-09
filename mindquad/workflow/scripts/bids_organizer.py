@@ -6,10 +6,12 @@ directories.
 """
 
 import argparse
+import gzip
 import json
 import logging
 import re
 import shutil
+import struct
 import sys
 from enum import Enum
 from pathlib import Path
@@ -71,6 +73,9 @@ class SeriesCandidate:
         stem: str,
         classification: ScanClassification,
         series_number: int,
+        description: str = "",
+        acquisition_time: str = "",
+        num_volumes: Optional[int] = None,
     ) -> None:
         """Initialize SeriesCandidate instance.
 
@@ -79,11 +84,17 @@ class SeriesCandidate:
             stem: Original file stem name.
             classification: ScanClassification object.
             series_number: DICOM series number for chronological ordering.
+            description: Series description or protocol name string.
+            acquisition_time: DICOM AcquisitionTime string.
+            num_volumes: Number of volumes for 4D functional series.
         """
         self._json_path = json_path
         self._stem = stem
         self._classification = classification
         self._series_number = series_number
+        self._description = description
+        self._acquisition_time = acquisition_time
+        self._num_volumes = num_volumes
 
     @property
     def json_path(self) -> Path:
@@ -104,6 +115,21 @@ class SeriesCandidate:
     def series_number(self) -> int:
         """Return the series number."""
         return self._series_number
+
+    @property
+    def description(self) -> str:
+        """Return the series description."""
+        return self._description
+
+    @property
+    def acquisition_time(self) -> str:
+        """Return the acquisition time."""
+        return self._acquisition_time
+
+    @property
+    def num_volumes(self) -> Optional[int]:
+        """Return the number of volumes."""
+        return self._num_volumes
 
 
 class DICOMSeriesClassifier:
@@ -132,17 +158,24 @@ class DICOMSeriesClassifier:
             )
             return {}
 
-    def extract_series_number(self, json_path: Path, stem: str) -> int:
+    def extract_series_number(
+        self,
+        json_path: Path,
+        stem: str,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> int:
         """Extract series number for deterministic chronological ordering.
 
         Args:
             json_path: Path to JSON metadata file.
             stem: Filename stem.
+            metadata: Optional pre-parsed JSON metadata dictionary.
 
         Returns:
             Extracted series number integer.
         """
-        metadata = self.read_json_metadata(json_path)
+        if metadata is None:
+            metadata = self.read_json_metadata(json_path)
         series_num = metadata.get("SeriesNumber")
         if series_num is not None:
             try:
@@ -185,9 +218,23 @@ class DICOMSeriesClassifier:
         Returns:
             BIDS suffix string or None.
         """
-        if any(key in description for key in ["t1w", "mprage", "t1_"]):
+        if any(
+            key in description
+            for key in [
+                "t1w",
+                "mprage",
+                "mp-rage",
+                "mp_rage",
+                "t1_",
+                "t1-",
+                "t1 ",
+            ]
+        ) or re.search(r"\b(?:t1|mprage)\b", description):
             return "T1w"
-        if any(key in description for key in ["t2w", "t2_spc", "t2_tse"]):
+        if any(
+            key in description
+            for key in ["t2w", "t2_spc", "t2_tse", "t2_", "t2-", "t2 "]
+        ) or re.search(r"\bt2\b", description):
             return "T2w"
         if "flair" in description:
             return "FLAIR"
@@ -391,20 +438,65 @@ class DICOMSeriesClassifier:
 
         return entities
 
+    def _is_discard_series(
+        self, description: str, metadata: Dict[str, Any]
+    ) -> bool:
+        """Check whether a series is a localizer or non-diagnostic scan to discard.
+
+        Parameters
+        ------------
+        description: str
+            Lowercase sequence description string.
+        metadata: Dict[str, Any]
+            Parsed JSON sidecar metadata dictionary.
+
+        Returns
+        --------
+            bool: boolean object
+                True if the series should be discarded, False otherwise.
+        """
+        if any(
+            term in description
+            for term in ("not diagnostic", "localizer", "scout", "3-plane")
+        ):
+            return True
+        bids_guess = metadata.get("BidsGuess")
+        if isinstance(bids_guess, list) and bids_guess:
+            if str(bids_guess[0]).strip().lower() == "discard":
+                return True
+        return False
+
     def classify_series(
-        self, json_path: Path, stem: str
+        self,
+        json_path: Path,
+        stem: str,
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> Optional[ScanClassification]:
         """Classify a series using its JSON sidecar and filename stem.
 
-        Args:
-            json_path: Path to the JSON metadata file.
-            stem: Filename stem.
+        Parameters
+        ------------
+        json_path: Path
+            Path to the JSON metadata file.
+        stem: str
+            Filename stem.
+        metadata: Optional[Dict[str, Any]]
+            Optional pre-parsed JSON metadata dictionary. Defaults to None.
 
-        Returns:
-            ScanClassification object if successfully classified, else None.
+        Returns
+        --------
+            Optional[ScanClassification]: classification object or None
+                ScanClassification object if classified, else None.
         """
-        metadata = self.read_json_metadata(json_path)
+        if metadata is None:
+            metadata = self.read_json_metadata(json_path)
         description = self._extract_series_description(metadata, stem)
+
+        if self._is_discard_series(description, metadata):
+            self._logger.info(
+                "Non-diagnostic/discard sequence skipped: %s", stem
+            )
+            return None
 
         # 1. Check Anatomical
         anat_suffix = self._detect_anat_suffix(description)
@@ -605,6 +697,167 @@ class BIDSOrganizer:
         ]
         return sorted(filtered)
 
+    def _read_nifti_volumes(self, nifti_path: Path) -> Optional[int]:
+        """Read volume count (dim[4]) directly from NIfTI header.
+
+        Args:
+            nifti_path: Path to .nii or .nii.gz file.
+
+        Returns:
+            Number of 4D volumes (time points), 1 for 3D scans, or None if unreadable/not a valid NIfTI.
+        """
+        if not nifti_path.exists():
+            return None
+        try:
+            open_func = gzip.open if str(nifti_path).endswith(".gz") else open
+            with open_func(nifti_path, "rb") as file_handle:
+                hdr = file_handle.read(348)
+                if len(hdr) < 348:
+                    return None
+                sizeof_le = struct.unpack("<i", hdr[:4])[0]
+                sizeof_be = struct.unpack(">i", hdr[:4])[0]
+                if sizeof_le == 348:
+                    endian = "<"
+                elif sizeof_be == 348:
+                    endian = ">"
+                else:
+                    return None
+                dim = struct.unpack(f"{endian}8h", hdr[40:56])
+                ndim = dim[0]
+                if ndim >= 4 and dim[4] > 0:
+                    return int(dim[4])
+                return 1
+        except Exception as exc:
+            self._logger.debug(
+                "Could not parse NIfTI header from %s: %s", nifti_path, exc
+            )
+            return None
+
+    def _is_orig_candidate(self, candidate: SeriesCandidate) -> bool:
+        """Check if candidate is a secondary/un-normalized reconstruction.
+
+        Args:
+            candidate: SeriesCandidate to inspect.
+
+        Returns:
+            True if scan is an ORIG/secondary reconstruction, False otherwise.
+        """
+        desc = candidate.description.lower().strip()
+        return (
+            desc.startswith("orig ")
+            or desc.startswith("orig_")
+            or desc.startswith("orig-")
+            or desc == "orig"
+            or candidate.series_number >= 40000
+        )
+
+    def _has_primary_counterpart(
+        self, orig_cand: SeriesCandidate, candidates: List[SeriesCandidate]
+    ) -> bool:
+        """Check if an ORIG candidate has a corresponding primary normalized scan.
+
+        Args:
+            orig_cand: Candidate identified as ORIG scan.
+            candidates: Full list of candidates in the session.
+
+        Returns:
+            True if a matching primary normalized scan exists, False otherwise.
+        """
+        clean_orig_desc = re.sub(
+            r"^orig[_\s-]+", "", orig_cand.description.lower().strip()
+        )
+        for prim_cand in candidates:
+            if prim_cand is orig_cand:
+                continue
+            if (
+                prim_cand.classification.modality
+                != orig_cand.classification.modality
+            ):
+                continue
+            if (
+                prim_cand.classification.suffix
+                != orig_cand.classification.suffix
+            ):
+                continue
+            if self._is_orig_candidate(prim_cand):
+                continue
+
+            # Check GE series number offset (e.g. 40002 vs 2)
+            series_diff = orig_cand.series_number - prim_cand.series_number
+            if series_diff in (40000, 30000):
+                return True
+
+            # If both have acquisition times, matching acquisition time indicates same scan
+            if orig_cand.acquisition_time and prim_cand.acquisition_time:
+                if orig_cand.acquisition_time == prim_cand.acquisition_time:
+                    clean_prim_desc = re.sub(
+                        r"^orig[_\s-]+",
+                        "",
+                        prim_cand.description.lower().strip(),
+                    )
+                    if (
+                        clean_orig_desc == clean_prim_desc
+                        or not clean_orig_desc
+                        or not clean_prim_desc
+                    ):
+                        return True
+
+            # If acquisition time is missing, check normalized series description
+            clean_prim_desc = re.sub(
+                r"^orig[_\s-]+", "", prim_cand.description.lower().strip()
+            )
+            if clean_orig_desc and clean_orig_desc == clean_prim_desc:
+                return True
+
+        return False
+
+    def _filter_candidates(
+        self, candidates: List[SeriesCandidate], min_bold_volumes: int = 15
+    ) -> List[SeriesCandidate]:
+        """Filter out aborted BOLD scans and duplicate ORIG anatomical reconstructions.
+
+        Args:
+            candidates: List of SeriesCandidate objects.
+            min_bold_volumes: Minimum number of volumes for a BOLD scan to be kept.
+
+        Returns:
+            Filtered list of SeriesCandidate objects.
+        """
+        filtered: List[SeriesCandidate] = []
+
+        for cand in candidates:
+            # 1. Filter aborted BOLD scans
+            if (
+                cand.classification.modality == BIDSModality.FUNC
+                and cand.classification.suffix == "bold"
+                and cand.num_volumes is not None
+                and min_bold_volumes > 0
+                and cand.num_volumes < min_bold_volumes
+            ):
+                self._logger.warning(
+                    "Skipping aborted BOLD scan '%s' (series %d): %d volumes (< %d required)",
+                    cand.stem,
+                    cand.series_number,
+                    cand.num_volumes,
+                    min_bold_volumes,
+                )
+                continue
+
+            # 2. Filter duplicate ORIG anatomical/structural scans if primary exists
+            if self._is_orig_candidate(cand) and self._has_primary_counterpart(
+                cand, candidates
+            ):
+                self._logger.info(
+                    "Skipping duplicate un-normalized ORIG scan '%s' (series %d) in favor of primary scan",
+                    cand.stem,
+                    cand.series_number,
+                )
+                continue
+
+            filtered.append(cand)
+
+        return filtered
+
     def _collect_candidates(self, input_dir: Path) -> List[SeriesCandidate]:
         """Collect and classify all candidate series from JSON sidecars.
 
@@ -619,14 +872,37 @@ class BIDSOrganizer:
 
         for json_path in json_sidecars:
             stem = json_path.stem
-            classification = self._classifier.classify_series(json_path, stem)
+            metadata = self._classifier.read_json_metadata(json_path)
+            classification = self._classifier.classify_series(
+                json_path, stem, metadata=metadata
+            )
             if classification is not None:
                 series_num = self._classifier.extract_series_number(
-                    json_path, stem
+                    json_path, stem, metadata=metadata
                 )
+                desc = self._classifier._extract_series_description(
+                    metadata, stem
+                )
+                acq_time = str(metadata.get("AcquisitionTime", "")).strip()
+
+                num_volumes = None
+                if classification.modality == BIDSModality.FUNC:
+                    nii_gz = json_path.parent / f"{stem}.nii.gz"
+                    nii = json_path.parent / f"{stem}.nii"
+                    if nii_gz.exists():
+                        num_volumes = self._read_nifti_volumes(nii_gz)
+                    elif nii.exists():
+                        num_volumes = self._read_nifti_volumes(nii)
+
                 candidates.append(
                     SeriesCandidate(
-                        json_path, stem, classification, series_num
+                        json_path=json_path,
+                        stem=stem,
+                        classification=classification,
+                        series_number=series_num,
+                        description=desc,
+                        acquisition_time=acq_time,
+                        num_volumes=num_volumes,
                     )
                 )
 
@@ -723,6 +999,7 @@ class BIDSOrganizer:
         bids_root: Path,
         subject_label: str,
         session_label: Optional[str] = None,
+        min_bold_volumes: int = 15,
     ) -> int:
         """Organize converted subject files into BIDS subject folder.
 
@@ -731,6 +1008,7 @@ class BIDSOrganizer:
             bids_root: Root directory of BIDS dataset.
             subject_label: Subject label (e.g. 'sub-001' or '001').
             session_label: Optional session label (e.g. 'ses-01' or '01').
+            min_bold_volumes: Minimum number of volumes for a BOLD scan to be kept.
 
         Returns:
             Total count of organized files.
@@ -756,6 +1034,15 @@ class BIDSOrganizer:
         if not candidates:
             self._logger.warning(
                 "No valid series candidates found in %s", input_dir
+            )
+            return 0
+
+        candidates = self._filter_candidates(
+            candidates, min_bold_volumes=min_bold_volumes
+        )
+        if not candidates:
+            self._logger.warning(
+                "No candidates remaining after filtering in %s", input_dir
             )
             return 0
 
@@ -931,6 +1218,15 @@ class BIDSOrganizerApp:
             help="Update IntendedFor in fieldmap sidecars without copying files.",
         )
         parser.add_argument(
+            "--min-bold-volumes",
+            type=int,
+            default=15,
+            help=(
+                "Minimum number of 4D volumes required for a BOLD series "
+                "(aborted scans with fewer volumes are ignored). Default is 15."
+            ),
+        )
+        parser.add_argument(
             "--output-marker",
             type=Path,
             default=None,
@@ -998,6 +1294,7 @@ class BIDSOrganizerApp:
             parsed_args.bids_dir,
             parsed_args.subject,
             parsed_args.session,
+            min_bold_volumes=parsed_args.min_bold_volumes,
         )
 
         if parsed_args.output_marker:

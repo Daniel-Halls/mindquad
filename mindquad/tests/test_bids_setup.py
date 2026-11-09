@@ -1,6 +1,8 @@
 """Unit tests for BIDS initialization and organization scripts."""
 
+import gzip
 import json
+import struct
 import tempfile
 import unittest
 from pathlib import Path
@@ -94,6 +96,28 @@ class TestDICOMSeriesClassifier(BaseBIDSTest):
             self.assertIsNotNone(classification)
             self.assertEqual(classification.modality, BIDSModality.ANAT)
             self.assertEqual(classification.suffix, "T1w")
+
+    def test_classify_t1w_hyphenated_mprage(self) -> None:
+        """Test classification of hyphenated MP-RAGE and space-delimited T1 descriptions."""
+        descriptions = [
+            "3D SAG T1 MP-RAGE_TI800",
+            "ORIG 3D SAG T1 MP-RAGE_TI800",
+            "T1 MPRAGE SAG",
+            "sag_t1_mprage",
+        ]
+        with self.create_temp_dir() as temp_dir:
+            for idx, desc in enumerate(descriptions):
+                json_file = Path(temp_dir) / f"test_t1_{idx}.json"
+                json_file.write_text(
+                    json.dumps({"SeriesDescription": desc}),
+                    encoding="utf-8",
+                )
+                classification = self.classifier.classify_series(
+                    json_file, f"test_t1_{idx}"
+                )
+                self.assertIsNotNone(classification, f"Failed to classify {desc}")
+                self.assertEqual(classification.modality, BIDSModality.ANAT)
+                self.assertEqual(classification.suffix, "T1w")
 
     def test_classify_dwi(self) -> None:
         """Test classification of Diffusion Weighted scan."""
@@ -475,6 +499,241 @@ class TestBIDSOrganizer(BaseBIDSTest):
                 "dwi/sub-19081001_dir-AP_dwi.nii.gz",
             )
 
+    @staticmethod
+    def _create_dummy_nifti_bytes(volumes: int = 1, is_4d: bool = True) -> bytes:
+        """Create a minimal valid NIfTI-1 gzip byte payload for testing."""
+        hdr = bytearray(348)
+        struct.pack_into("<i", hdr, 0, 348)
+        if is_4d:
+            struct.pack_into("<8h", hdr, 40, 4, 64, 64, 30, volumes, 1, 1, 1)
+        else:
+            struct.pack_into("<8h", hdr, 40, 3, 64, 64, 30, 1, 1, 1, 1)
+        return gzip.compress(bytes(hdr))
+
+    def test_read_nifti_volumes(self) -> None:
+        """Test reading 4D volume count directly from NIfTI-1 header."""
+        organizer = BIDSOrganizer()
+        with self.create_temp_dir() as temp_dir:
+            temp_path = Path(temp_dir)
+
+            # Valid 4D scan with 7 volumes
+            p_4d_7 = temp_path / "bold_7.nii.gz"
+            p_4d_7.write_bytes(self._create_dummy_nifti_bytes(volumes=7, is_4d=True))
+            self.assertEqual(organizer._read_nifti_volumes(p_4d_7), 7)
+
+            # Valid 4D scan with 500 volumes
+            p_4d_500 = temp_path / "bold_500.nii.gz"
+            p_4d_500.write_bytes(self._create_dummy_nifti_bytes(volumes=500, is_4d=True))
+            self.assertEqual(organizer._read_nifti_volumes(p_4d_500), 500)
+
+            # Valid 3D scan
+            p_3d = temp_path / "anat.nii.gz"
+            p_3d.write_bytes(self._create_dummy_nifti_bytes(volumes=1, is_4d=False))
+            self.assertEqual(organizer._read_nifti_volumes(p_3d), 1)
+
+            # Non-nifti plain text file
+            p_txt = temp_path / "dummy.nii.gz"
+            p_txt.write_text("plain text", encoding="utf-8")
+            self.assertIsNone(organizer._read_nifti_volumes(p_txt))
+
+            # Non-existent file
+            self.assertIsNone(organizer._read_nifti_volumes(temp_path / "nonexistent.nii.gz"))
+
+    def test_filter_aborted_bold_scans(self) -> None:
+        """Test aborted BOLD scan (< 15 volumes) is skipped while complete scan is kept."""
+        with self.create_temp_dir() as temp_dir:
+            temp_path = Path(temp_dir)
+            input_dir = temp_path / "dcm2niix_out"
+            bids_dir = temp_path / "bids"
+            input_dir.mkdir(parents=True)
+            bids_dir.mkdir(parents=True)
+
+            # Series 7: aborted BOLD (7 volumes)
+            s7_meta = {
+                "SeriesDescription": "AM_task_FINAL",
+                "SeriesNumber": 7,
+                "AcquisitionTime": "15:46:52.000000",
+            }
+            (input_dir / "007_AM_task_FINAL.json").write_text(
+                json.dumps(s7_meta), encoding="utf-8"
+            )
+            (input_dir / "007_AM_task_FINAL.nii.gz").write_bytes(
+                self._create_dummy_nifti_bytes(volumes=7, is_4d=True)
+            )
+
+            # Series 8: complete BOLD (500 volumes)
+            s8_meta = {
+                "SeriesDescription": "AM_task_FINAL",
+                "SeriesNumber": 8,
+                "AcquisitionTime": "15:48:52.000000",
+            }
+            (input_dir / "008_AM_task_FINAL.json").write_text(
+                json.dumps(s8_meta), encoding="utf-8"
+            )
+            (input_dir / "008_AM_task_FINAL.nii.gz").write_bytes(
+                self._create_dummy_nifti_bytes(volumes=500, is_4d=True)
+            )
+
+            organizer = BIDSOrganizer()
+            transferred = organizer.organize_subject(
+                input_dir, bids_dir, "VNS002", session_label="01", min_bold_volumes=15
+            )
+
+            # Only Series 8 should be transferred (1 pair = 2 files)
+            self.assertEqual(transferred, 2)
+
+            func_dir = bids_dir / "sub-VNS002" / "ses-01" / "func"
+            # Should NOT have run- indices because only one valid run remains
+            expected_nii = func_dir / "sub-VNS002_ses-01_task-am_bold.nii.gz"
+            expected_json = func_dir / "sub-VNS002_ses-01_task-am_bold.json"
+            self.assertTrue(expected_nii.exists(), "Complete BOLD NIfTI must exist")
+            self.assertTrue(expected_json.exists(), "Complete BOLD JSON must exist")
+
+            # Must not have run-01 / run-02 files
+            self.assertFalse(
+                (func_dir / "sub-VNS002_ses-01_task-am_run-01_bold.nii.gz").exists()
+            )
+            self.assertFalse(
+                (func_dir / "sub-VNS002_ses-01_task-am_run-02_bold.nii.gz").exists()
+            )
+
+    def test_filter_aborted_bold_scans_disabled_when_min_volumes_zero(self) -> None:
+        """Test aborted BOLD scan is kept if min_bold_volumes is 0."""
+        with self.create_temp_dir() as temp_dir:
+            temp_path = Path(temp_dir)
+            input_dir = temp_path / "dcm2niix_out"
+            bids_dir = temp_path / "bids"
+            input_dir.mkdir(parents=True)
+            bids_dir.mkdir(parents=True)
+
+            s7_meta = {
+                "SeriesDescription": "AM_task_FINAL",
+                "SeriesNumber": 7,
+            }
+            (input_dir / "007_AM_task_FINAL.json").write_text(
+                json.dumps(s7_meta), encoding="utf-8"
+            )
+            (input_dir / "007_AM_task_FINAL.nii.gz").write_bytes(
+                self._create_dummy_nifti_bytes(volumes=7, is_4d=True)
+            )
+
+            s8_meta = {
+                "SeriesDescription": "AM_task_FINAL",
+                "SeriesNumber": 8,
+            }
+            (input_dir / "008_AM_task_FINAL.json").write_text(
+                json.dumps(s8_meta), encoding="utf-8"
+            )
+            (input_dir / "008_AM_task_FINAL.nii.gz").write_bytes(
+                self._create_dummy_nifti_bytes(volumes=500, is_4d=True)
+            )
+
+            organizer = BIDSOrganizer()
+            transferred = organizer.organize_subject(
+                input_dir, bids_dir, "VNS002", session_label="01", min_bold_volumes=0
+            )
+
+            # Both runs kept -> 4 files
+            self.assertEqual(transferred, 4)
+            func_dir = bids_dir / "sub-VNS002" / "ses-01" / "func"
+            self.assertTrue(
+                (func_dir / "sub-VNS002_ses-01_task-am_run-01_bold.nii.gz").exists()
+            )
+            self.assertTrue(
+                (func_dir / "sub-VNS002_ses-01_task-am_run-02_bold.nii.gz").exists()
+            )
+
+    def test_filter_duplicate_orig_anatomical_scans(self) -> None:
+        """Test duplicate ORIG anatomical scan is skipped when primary scan exists."""
+        with self.create_temp_dir() as temp_dir:
+            temp_path = Path(temp_dir)
+            input_dir = temp_path / "dcm2niix_out"
+            bids_dir = temp_path / "bids"
+            input_dir.mkdir(parents=True)
+            bids_dir.mkdir(parents=True)
+
+            # Primary normalized T1w: Series 2
+            s2_meta = {
+                "SeriesDescription": "3D SAG T1 MP-RAGE_TI800",
+                "SeriesNumber": 2,
+                "AcquisitionTime": "15:08:44.000000",
+            }
+            (input_dir / "002_t1w.json").write_text(
+                json.dumps(s2_meta), encoding="utf-8"
+            )
+            (input_dir / "002_t1w.nii.gz").write_bytes(
+                self._create_dummy_nifti_bytes(volumes=1, is_4d=False)
+            )
+
+            # Un-normalized ORIG duplicate: Series 40002
+            s40002_meta = {
+                "SeriesDescription": "ORIG 3D SAG T1 MP-RAGE_TI800",
+                "SeriesNumber": 40002,
+                "AcquisitionTime": "15:08:44.000000",
+            }
+            (input_dir / "40002_orig_t1w.json").write_text(
+                json.dumps(s40002_meta), encoding="utf-8"
+            )
+            (input_dir / "40002_orig_t1w.nii.gz").write_bytes(
+                self._create_dummy_nifti_bytes(volumes=1, is_4d=False)
+            )
+
+            organizer = BIDSOrganizer()
+            transferred = organizer.organize_subject(
+                input_dir, bids_dir, "VNS002", session_label="01"
+            )
+
+            # Only Series 2 should be transferred (1 pair = 2 files)
+            self.assertEqual(transferred, 2)
+
+            anat_dir = bids_dir / "sub-VNS002" / "ses-01" / "anat"
+            # Should NOT have run- indices because only one valid run remains
+            expected_nii = anat_dir / "sub-VNS002_ses-01_T1w.nii.gz"
+            expected_json = anat_dir / "sub-VNS002_ses-01_T1w.json"
+            self.assertTrue(expected_nii.exists(), "Primary T1w NIfTI must exist")
+            self.assertTrue(expected_json.exists(), "Primary T1w JSON must exist")
+
+            # Must not have run-01 / run-02 files
+            self.assertFalse(
+                (anat_dir / "sub-VNS002_ses-01_run-01_T1w.nii.gz").exists()
+            )
+            self.assertFalse(
+                (anat_dir / "sub-VNS002_ses-01_run-02_T1w.nii.gz").exists()
+            )
+
+    def test_keep_orig_when_no_primary_exists(self) -> None:
+        """Test ORIG anatomical scan is preserved if no primary normalized scan is present."""
+        with self.create_temp_dir() as temp_dir:
+            temp_path = Path(temp_dir)
+            input_dir = temp_path / "dcm2niix_out"
+            bids_dir = temp_path / "bids"
+            input_dir.mkdir(parents=True)
+            bids_dir.mkdir(parents=True)
+
+            # Only ORIG scan: Series 40002
+            s40002_meta = {
+                "SeriesDescription": "ORIG 3D SAG T1 MP-RAGE_TI800",
+                "SeriesNumber": 40002,
+                "AcquisitionTime": "15:08:44.000000",
+            }
+            (input_dir / "40002_orig_t1w.json").write_text(
+                json.dumps(s40002_meta), encoding="utf-8"
+            )
+            (input_dir / "40002_orig_t1w.nii.gz").write_bytes(
+                self._create_dummy_nifti_bytes(volumes=1, is_4d=False)
+            )
+
+            organizer = BIDSOrganizer()
+            transferred = organizer.organize_subject(
+                input_dir, bids_dir, "VNS002", session_label="01"
+            )
+
+            # ORIG scan must be transferred so data is not lost (2 files)
+            self.assertEqual(transferred, 2)
+            anat_dir = bids_dir / "sub-VNS002" / "ses-01" / "anat"
+            self.assertTrue((anat_dir / "sub-VNS002_ses-01_T1w.nii.gz").exists())
+            self.assertTrue((anat_dir / "sub-VNS002_ses-01_T1w.json").exists())
+
 
 
 
@@ -565,6 +824,28 @@ class TestStudyCohort(BaseBIDSTest):
         cohort = StudyCohort({"subject_mapping": None, "subjects": None})
         self.assertEqual(cohort.get_bids_subject_label("sub-01"), "01")
         self.assertEqual(cohort.get_bids_subject_label("VNS001_A"), "VNS001A")
+
+    def test_configured_bids_subjects_expand_to_raw_sessions(self) -> None:
+        """Test configured BIDS subject IDs expand to all mapped raw directories."""
+        cohort = StudyCohort({
+            "is_bids": False,
+            "subjects": ["VNS001", "VNS002"],
+            "subject_mapping": {
+                "VNS001_A": {"subject": "VNS001", "session": "01"},
+                "VNS001_S": {"subject": "VNS001", "session": "02"},
+                "VNS002_A": {"subject": "VNS002", "session": "01"},
+                "VNS002_S": {"subject": "VNS002", "session": "02"},
+            },
+        })
+        self.assertEqual(
+            cohort.subjects,
+            ["VNS001_A", "VNS001_S", "VNS002_A", "VNS002_S"],
+        )
+        self.assertEqual(cohort.bids_subjects, ["VNS001", "VNS002"])
+        self.assertEqual(
+            cohort.get_raw_subjects_for_bids_subject("VNS001"),
+            ["VNS001_A", "VNS001_S"],
+        )
 
 
 if __name__ == "__main__":

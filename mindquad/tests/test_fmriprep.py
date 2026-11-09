@@ -25,8 +25,11 @@ class BaseTest(unittest.TestCase):
         cls.tmp_root.mkdir(parents=True, exist_ok=True)
 
     def create_temp_dir(self) -> tempfile.TemporaryDirectory:
-        """Create temp directory inside project-local .tmp/."""
-        return tempfile.TemporaryDirectory(dir=str(self.tmp_root))
+        """Create temp directory inside project-local .tmp/ or fallback."""
+        try:
+            return tempfile.TemporaryDirectory(dir=str(self.tmp_root))
+        except (OSError, PermissionError):
+            return tempfile.TemporaryDirectory()
 
 
 class TestFMRIPrepOutputSpace(unittest.TestCase):
@@ -492,6 +495,49 @@ class TestFMRIPrepRunner(BaseTest):
             )
             self.assertEqual(ret, 1)
             self.assertFalse(marker.exists())
+
+    def test_sync_freesurfer_session_aliases_forward(self) -> None:
+        """Test creating forward session symlink when subject recon exists."""
+        with self.create_temp_dir() as temp_dir:
+            temp_path = Path(temp_dir)
+            bids_dir = temp_path / "bids"
+            fs_dir = temp_path / "fastsurfer"
+            (bids_dir / "sub-01" / "ses-02").mkdir(parents=True)
+            (fs_dir / "sub-01" / "scripts").mkdir(parents=True)
+            lock = fs_dir / "sub-01" / "scripts" / "IsRunning.lh"
+            lock.touch()
+
+            self.runner._sync_freesurfer_session_aliases(
+                bids_dir=bids_dir,
+                fs_subjects_dir=fs_dir,
+                subject="sub-01",
+            )
+
+            alias = fs_dir / "sub-01_ses-02"
+            self.assertTrue(alias.is_symlink())
+            self.assertEqual(alias.readlink(), Path("sub-01"))
+            self.assertTrue(alias.exists())
+            self.assertFalse(lock.exists())
+
+    def test_sync_freesurfer_session_aliases_reverse(self) -> None:
+        """Test creating subject symlink when only session recon exists."""
+        with self.create_temp_dir() as temp_dir:
+            temp_path = Path(temp_dir)
+            bids_dir = temp_path / "bids"
+            fs_dir = temp_path / "fastsurfer"
+            (bids_dir / "sub-01" / "ses-01").mkdir(parents=True)
+            (fs_dir / "sub-01_ses-01" / "scripts").mkdir(parents=True)
+
+            self.runner._sync_freesurfer_session_aliases(
+                bids_dir=bids_dir,
+                fs_subjects_dir=fs_dir,
+                subject="01",
+            )
+
+            target = fs_dir / "sub-01"
+            self.assertTrue(target.is_symlink())
+            self.assertEqual(target.readlink(), Path("sub-01_ses-01"))
+            self.assertTrue(target.exists())
 
 
 class TestFMRIPrepApp(unittest.TestCase):

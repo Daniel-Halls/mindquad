@@ -8,6 +8,11 @@ rule mrs_processing:
     """Run MRS preprocessing, voxel tissue segmentation, and spectral fitting with FSL-MRS in parallel with FastSurfer."""
     input:
         bids_marker=get_bids_dir() + "/sub-{subject}/.bids_organized",
+        mriqc_marker=lambda wildcards: (
+            get_mriqc_dir() + f"/sub-{wildcards.subject}/.mriqc_complete"
+            if is_pipeline_enabled("mriqc")
+            else []
+        ),
     output:
         marker=get_mrs_dir() + "/sub-{subject}/.mrs_complete",
         report=get_mrs_dir() + "/sub-{subject}.html",

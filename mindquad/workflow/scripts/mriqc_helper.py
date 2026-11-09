@@ -183,6 +183,8 @@ class MRIQCCommandBuilder:
             str(self._config.threads),
             "--omp-nthreads",
             str(self._config.threads),
+            "--mem-gb",
+            str(self._config.mem_gb),
             "--work-dir",
             str(Path(work_dir)),
         ])
@@ -199,14 +201,21 @@ class MRIQCCommandBuilder:
     ) -> List[str]:
         """Build command argument list for group-level MRIQC execution.
 
-        Args:
-            bids_dir: Path to BIDS dataset directory.
-            output_dir: Path to MRIQC derivatives output directory.
-            work_dir: Path to intermediate working directory for group level.
-            executable: Base executable command.
+        Parameters
+        ------------
+        bids_dir: str
+            Path to BIDS dataset directory.
+        output_dir: str
+            Path to MRIQC derivatives output directory.
+        work_dir: str
+            Path to intermediate working directory for group level.
+        executable: str
+            Base executable command. Defaults to "mriqc".
 
-        Returns:
-            List of CLI command tokens.
+        Returns
+        --------
+            List[str]: list of strings
+                List of CLI command tokens.
         """
         import shlex
         cmd: List[str] = shlex.split(executable) + [
@@ -221,6 +230,8 @@ class MRIQCCommandBuilder:
             str(self._config.threads),
             "--omp-nthreads",
             str(self._config.threads),
+            "--mem-gb",
+            str(self._config.mem_gb),
             "--work-dir",
             str(Path(work_dir)),
         ])
@@ -358,6 +369,7 @@ class MRIQCRunner:
         work_dir: Path,
         tmp_dir: Path,
         threads: int = 2,
+        mem_gb: int = 8,
         modalities: Optional[List[str]] = None,
         extra_args: str = "--verbose-reports --no-sub",
         marker_path: Optional[Path] = None,
@@ -366,24 +378,42 @@ class MRIQCRunner:
     ) -> int:
         """Execute participant-level MRIQC pipeline.
 
-        Args:
-            bids_dir: Path to BIDS dataset.
-            output_dir: Path to MRIQC derivatives output.
-            subject: Subject label.
-            work_dir: Path to working directory.
-            tmp_dir: Path to temporary directory.
-            threads: Number of threads to use.
-            modalities: Modalities to process.
-            extra_args: Extra CLI arguments.
-            marker_path: Optional marker file to touch upon success.
-            report_path: Optional destination path for HTML report.
+        Parameters
+        ------------
+        bids_dir: Path
+            Path to BIDS dataset.
+        output_dir: Path
+            Path to MRIQC derivatives output.
+        subject: str
+            Subject label.
+        work_dir: Path
+            Path to working directory.
+        tmp_dir: Path
+            Path to temporary directory.
+        threads: int
+            Number of threads to use. Defaults to 2.
+        mem_gb: int
+            Memory limit in gigabytes. Defaults to 8.
+        modalities: Optional[List[str]]
+            Modalities to process. Defaults to None.
+        extra_args: str
+            Extra CLI arguments. Defaults to "--verbose-reports --no-sub".
+        marker_path: Optional[Path]
+            Optional marker file to touch upon success. Defaults to None.
+        report_path: Optional[Path]
+            Optional destination path for HTML report. Defaults to None.
+        executable: str
+            Executable command string. Defaults to "mriqc".
 
-        Returns:
-            Process return code.
+        Returns
+        --------
+            int: integer object
+                Process return code.
         """
         config = MRIQCConfig(
             modalities=modalities,
             threads=threads,
+            mem_gb=mem_gb,
             extra_args=extra_args,
             bids_dir=str(bids_dir),
             derivatives_dir=str(output_dir.parent),
@@ -439,6 +469,7 @@ class MRIQCRunner:
         work_dir: Path,
         tmp_dir: Path,
         threads: int = 2,
+        mem_gb: int = 8,
         modalities: Optional[List[str]] = None,
         extra_args: str = "--verbose-reports --no-sub",
         marker_path: Optional[Path] = None,
@@ -446,22 +477,38 @@ class MRIQCRunner:
     ) -> int:
         """Execute group-level MRIQC pipeline.
 
-        Args:
-            bids_dir: Path to BIDS dataset.
-            output_dir: Path to MRIQC derivatives output.
-            work_dir: Path to working directory.
-            tmp_dir: Path to temporary directory.
-            threads: Number of threads to use.
-            modalities: Modalities to process.
-            extra_args: Extra CLI arguments.
-            marker_path: Optional marker file to touch upon success.
+        Parameters
+        ------------
+        bids_dir: Path
+            Path to BIDS dataset.
+        output_dir: Path
+            Path to MRIQC derivatives output.
+        work_dir: Path
+            Path to working directory.
+        tmp_dir: Path
+            Path to temporary directory.
+        threads: int
+            Number of threads to use. Defaults to 2.
+        mem_gb: int
+            Memory limit in gigabytes. Defaults to 8.
+        modalities: Optional[List[str]]
+            Modalities to process. Defaults to None.
+        extra_args: str
+            Extra CLI arguments. Defaults to "--verbose-reports --no-sub".
+        marker_path: Optional[Path]
+            Optional marker file to touch upon success. Defaults to None.
+        executable: str
+            Executable command string. Defaults to "mriqc".
 
-        Returns:
-            Process return code.
+        Returns
+        --------
+            int: integer object
+                Process return code.
         """
         config = MRIQCConfig(
             modalities=modalities,
             threads=threads,
+            mem_gb=mem_gb,
             extra_args=extra_args,
             bids_dir=str(bids_dir),
             derivatives_dir=str(output_dir.parent),
@@ -536,6 +583,7 @@ class MRIQCApp:
         part_parser.add_argument("--work-dir", type=Path, required=True)
         part_parser.add_argument("--tmp-dir", type=Path, required=True)
         part_parser.add_argument("--threads", type=int, default=2)
+        part_parser.add_argument("--mem-gb", type=int, default=8)
         part_parser.add_argument(
             "--modalities", nargs="+", default=["T1w", "bold", "dwi"]
         )
@@ -555,6 +603,7 @@ class MRIQCApp:
         group_parser.add_argument("--work-dir", type=Path, required=True)
         group_parser.add_argument("--tmp-dir", type=Path, required=True)
         group_parser.add_argument("--threads", type=int, default=2)
+        group_parser.add_argument("--mem-gb", type=int, default=8)
         group_parser.add_argument(
             "--modalities", nargs="+", default=["T1w", "bold", "dwi"]
         )
@@ -571,11 +620,15 @@ class MRIQCApp:
     def run(self, args: Optional[List[str]] = None) -> int:
         """Execute CLI application.
 
-        Args:
-            args: Optional command line arguments.
+        Parameters
+        ------------
+        args: Optional[List[str]]
+            Optional command line arguments. Defaults to None.
 
-        Returns:
-            Exit status integer.
+        Returns
+        --------
+            int: integer object
+                Exit status integer.
         """
         logging.basicConfig(
             level=logging.INFO,
@@ -592,6 +645,7 @@ class MRIQCApp:
                 work_dir=parsed.work_dir,
                 tmp_dir=parsed.tmp_dir,
                 threads=parsed.threads,
+                mem_gb=parsed.mem_gb,
                 modalities=parsed.modalities,
                 extra_args=parsed.extra_args,
                 marker_path=parsed.marker,
@@ -605,6 +659,7 @@ class MRIQCApp:
                 work_dir=parsed.work_dir,
                 tmp_dir=parsed.tmp_dir,
                 threads=parsed.threads,
+                mem_gb=parsed.mem_gb,
                 modalities=parsed.modalities,
                 extra_args=parsed.extra_args,
                 marker_path=parsed.marker,

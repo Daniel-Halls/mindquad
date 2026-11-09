@@ -8,7 +8,7 @@ import subprocess
 import sys
 from enum import Enum
 from pathlib import Path
-from typing import Any, ClassVar, Dict, List, Optional
+from typing import Any, ClassVar, Dict, List, Optional, Union
 
 
 class FMRIPrepOutputSpace(Enum):
@@ -518,6 +518,102 @@ class FMRIPrepRunner:
             )
         return target_report
 
+    def _sync_freesurfer_session_aliases(
+        self,
+        bids_dir: Union[Path, str],
+        fs_subjects_dir: Union[Path, str],
+        subject: str,
+    ) -> None:
+        """Ensure FreeSurfer directory has session aliases and clear lock files.
+
+        In sMRIPrep (0.16+) / fMRIPrep (20.2+), when BIDS data includes session
+        subdirectories (e.g., ses-01), FreeSurfer searches for subject_id formatted
+        as `sub-<subject>_<session>` (e.g. sub-VNS001_ses-02). Upstream FastSurfer
+        reconstructions typically write to `sub-<subject>`. Relative symlinks
+        ensure resolution inside Singularity / Apptainer mounts without path
+        translation issues.
+
+        Args:
+            bids_dir: Path to BIDS dataset directory.
+            fs_subjects_dir: Path to FreeSurfer/FastSurfer subjects directory.
+            subject: Subject identifier (with or without 'sub-' prefix).
+        """
+        clean_sub = subject.replace("sub-", "").strip()
+        sub_id = f"sub-{clean_sub}"
+        fs_dir = Path(fs_subjects_dir).resolve()
+        target_sub_dir = fs_dir / sub_id
+
+        # Discover all session folders for this participant in bids_dir
+        sub_bids_dir = Path(bids_dir).resolve() / sub_id
+        ses_labels: List[str] = []
+        if sub_bids_dir.exists():
+            for ses_entry in sorted(sub_bids_dir.glob("ses-*")):
+                if ses_entry.is_dir():
+                    ses_labels.append(ses_entry.name)
+
+        # 1. Forward alias: target sub-<id> exists -> symlink sub-<id>_<ses> to sub-<id>
+        if target_sub_dir.exists():
+            for ses in ses_labels:
+                ses_alias = fs_dir / f"{sub_id}_{ses}"
+                if ses_alias.is_symlink() and not ses_alias.exists():
+                    try:
+                        ses_alias.unlink(missing_ok=True)
+                    except Exception:
+                        pass
+                if not ses_alias.exists():
+                    try:
+                        # Relative symlink ensures validity inside container mounts
+                        ses_alias.symlink_to(sub_id)
+                        self._logger.info(
+                            "Created FreeSurfer session alias: %s -> %s",
+                            ses_alias.name,
+                            sub_id,
+                        )
+                    except Exception as e:
+                        self._logger.warning(
+                            "Failed to create FreeSurfer session alias %s: %s",
+                            ses_alias,
+                            e,
+                        )
+
+        # 2. Reverse alias: session-specific recon exists -> symlink sub-<id> to session recon
+        if not target_sub_dir.exists():
+            for ses in ses_labels:
+                ses_alias = fs_dir / f"{sub_id}_{ses}"
+                if ses_alias.exists():
+                    try:
+                        target_sub_dir.symlink_to(ses_alias.name)
+                        self._logger.info(
+                            "Created FreeSurfer subject alias: %s -> %s",
+                            target_sub_dir.name,
+                            ses_alias.name,
+                        )
+                        break
+                    except Exception as e:
+                        self._logger.warning(
+                            "Failed to create FreeSurfer subject alias %s: %s",
+                            target_sub_dir,
+                            e,
+                        )
+
+        # 3. Clean stale lock files across subject and session directories
+        candidate_dirs = [target_sub_dir] + [
+            fs_dir / f"{sub_id}_{ses}" for ses in ses_labels
+        ]
+        for candidate in candidate_dirs:
+            scripts_dir = candidate / "scripts"
+            if scripts_dir.exists():
+                for lock_file in scripts_dir.glob("IsRunning.*"):
+                    try:
+                        lock_file.unlink()
+                        self._logger.info(
+                            "Removed leftover FreeSurfer lock file: %s", lock_file
+                        )
+                    except Exception as e:
+                        self._logger.warning(
+                            "Failed to remove lock file %s: %s", lock_file, e
+                        )
+
     def run(
         self,
         bids_dir: Path,
@@ -593,15 +689,11 @@ class FMRIPrepRunner:
         env = self.prepare_environment(tmp_dir, threads, fs_license)
 
         if fs_subjects_dir:
-            clean_sub = subject.replace("sub-", "").strip()
-            scripts_dir = Path(fs_subjects_dir) / f"sub-{clean_sub}" / "scripts"
-            if scripts_dir.exists():
-                for lock_file in scripts_dir.glob("IsRunning.*"):
-                    try:
-                        lock_file.unlink()
-                        self._logger.info("Removed leftover FreeSurfer lock file: %s", lock_file)
-                    except Exception as e:
-                        self._logger.warning("Failed to remove lock file %s: %s", lock_file, e)
+            self._sync_freesurfer_session_aliases(
+                bids_dir=bids_dir,
+                fs_subjects_dir=fs_subjects_dir,
+                subject=subject,
+            )
 
         self._logger.info("Executing fMRIPrep command: %s", " ".join(cmd))
         # Dynamically inject root mounts for wrapper-based singularity containers

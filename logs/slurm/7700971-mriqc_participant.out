@@ -1,0 +1,58 @@
+------------------------------------------------------------------
+  Running MRIQC version 25.1.0.dev45+g699d1691
+  ----------------------------------------------------------------
+
+  NOTICE
+  Copyright © The NiPreps Developers.
+  
+  This product includes software developed by
+  the NiPreps Community (https://nipreps.org/).
+  
+  Portions of this software were developed at the Department of
+  Psychology at Stanford University, Stanford, CA, US.
+  
+  This software contains code ultimately derived from the
+  PCP Quality Assessment Protocol (QAP;
+  http://preprocessed-connectomes-project.org/quality-assessment-protocol)
+  by C. Craddock, S. Giavasis, D. Clark, Z. Shezhad, and J. Pellman.
+  
+  This software is also distributed as a Docker container image.
+  The bootstrapping file for the image ("Dockerfile") is licensed
+  under the MIT License.
+
+  ----------------------------------------------------------------
+
+  * BIDS dataset path: /imgshare/tES-FUS/VNS/analysis/bids.
+  * Output folder: /imgshare/tES-FUS/VNS/analysis/derivatives/mriqc.
+  * Analysis levels: ['participant'].
+------------------------------------------------------------------
+
+2026-10-15 13:53:27 |[33;20m IMPORTANT [0m|[33;20m mriqc            [0m|[33;20m Extracting metadata and entities for 1 input runs of modality 't1w'...[0m
+2026-10-15 13:53:28 |[33;20m IMPORTANT [0m|[33;20m mriqc            [0m|[33;20m File size ('t1w'): 0.01|0.01 GB [maximum|average].[0m
+2026-10-15 13:53:28 |[33;20m IMPORTANT [0m|[33;20m mriqc            [0m|[33;20m Extracting metadata and entities for 1 input runs of modality 'bold'...[0m
+2026-10-15 13:53:28 |[33;20m IMPORTANT [0m|[33;20m mriqc            [0m|[33;20m File size ('bold'): 0.63|0.63 GB [maximum|average].[0m
+2026-10-15 13:53:42 |[33;20m IMPORTANT [0m|[33;20m mriqc            [0m|[33;20m Building MRIQC's workflows...[0m
+2026-10-15 13:53:52 |[33;20m IMPORTANT [0m|[33;20m mriqc            [0m|[33;20m Workflow building finished (exit code 0).[0m
+2026-10-15 14:53:16 |[34;20m INFO     [0m|[34;20m niworkflows      [0m|[34;20m Estimating initial transform using AffineInitializer[0m
+2026-10-15 14:54:30 |[34;20m INFO     [0m|[34;20m niworkflows      [0m|[34;20m Terminal outputs of initialization saved (/imgshare/tES-FUS/VNS/analysis/work/mriqc/sub-VNS001/mriqc_wf/anatMRIQC/SpatialNormalization/48bd789d11ebde934ac04c207b31cf27dca05ae7/SpatialNormalization/stderr.nipype-init).[0m
+2026-10-15 14:54:30 |[34;20m INFO     [0m|[34;20m niworkflows      [0m|[34;20m Loading settings from file /opt/conda/lib/python3.11/site-packages/niworkflows/data/t1w-mni_registration_testing_000.json.[0m
+2026-10-15 14:54:30 |[34;20m INFO     [0m|[34;20m niworkflows      [0m|[34;20m Retry #1, commandline: 
+antsRegistration --collapse-output-transforms 1 --dimensionality 3 --float 0 --initial-moving-transform [ /imgshare/tES-FUS/VNS/analysis/work/mriqc/sub-VNS001/mriqc_wf/anatMRIQC/SpatialNormalization/48bd789d11ebde934ac04c207b31cf27dca05ae7/SpatialNormalization/transform.mat, 0 ] --initialize-transforms-per-stage 0 --interpolation LanczosWindowedSinc --output [ ants_t1_to_mni, ants_t1_to_mni_Warped.nii.gz ] --transform Rigid[ 1.0 ] --metric Mattes[ /imgshare/tES-FUS/VNS/analysis/work/mriqc/sub-VNS001/mriqc_wf/anatMRIQC/SpatialNormalization/48bd789d11ebde934ac04c207b31cf27dca05ae7/SpatialNormalization/fixed_masked.nii.gz, /imgshare/tES-FUS/VNS/analysis/work/mriqc/sub-VNS001/mriqc_wf/anatMRIQC/SpatialNormalization/48bd789d11ebde934ac04c207b31cf27dca05ae7/SpatialNormalization/moving_masked.nii.gz, 1, 56, Random, 0.2 ] --convergence [ 20, 1e-07, 15 ] --smoothing-sigmas 4.0vox --shrink-factors 2 --use-histogram-matching 0 --transform Affine[ 1.0 ] --metric Mattes[ /imgshare/tES-FUS/VNS/analysis/work/mriqc/sub-VNS001/mriqc_wf/anatMRIQC/SpatialNormalization/48bd789d11ebde934ac04c207b31cf27dca05ae7/SpatialNormalization/fixed_masked.nii.gz, /imgshare/tES-FUS/VNS/analysis/work/mriqc/sub-VNS001/mriqc_wf/anatMRIQC/SpatialNormalization/48bd789d11ebde934ac04c207b31cf27dca05ae7/SpatialNormalization/moving_masked.nii.gz, 1, 56, Random, 0.1 ] --convergence [ 15, 1e-08, 5 ] --smoothing-sigmas 2.0vox --shrink-factors 1 --use-histogram-matching 1 --winsorize-image-intensities [ 0.005, 0.995 ]  --write-composite-transform 1[0m
+2026-10-15 14:54:49 |[34;20m INFO     [0m|[34;20m niworkflows      [0m|[34;20m Successful spatial normalization (retry #1).[0m
+2026-10-15 14:54:51 |[34;20m INFO     [0m|[34;20m niworkflows      [0m|[34;20m Report - setting fixed (/imgshare/tES-FUS/VNS/analysis/work/mriqc/sub-VNS001/mriqc_wf/anatMRIQC/SpatialNormalization/48bd789d11ebde934ac04c207b31cf27dca05ae7/SpatialNormalization/fixed_masked.nii.gz) and moving (/imgshare/tES-FUS/VNS/analysis/work/mriqc/sub-VNS001/mriqc_wf/anatMRIQC/SpatialNormalization/48bd789d11ebde934ac04c207b31cf27dca05ae7/SpatialNormalization/ants_t1_to_mni_Warped.nii.gz) images[0m
+2026-10-15 14:54:51 |[34;20m INFO     [0m|[34;20m niworkflows      [0m|[34;20m Generating visual report[0m
+2026-10-15 14:58:54 |[34;20m INFO     [0m|[34;20m niworkflows      [0m|[34;20m Estimating initial transform using AffineInitializer[0m
+2026-10-15 14:59:34 |[34;20m INFO     [0m|[34;20m niworkflows      [0m|[34;20m Loading settings from file /opt/conda/lib/python3.11/site-packages/niworkflows/data/boldref-mni_registration_precise_000.json.[0m
+2026-10-15 14:59:34 |[34;20m INFO     [0m|[34;20m niworkflows      [0m|[34;20m Retry #1, commandline: 
+antsRegistration --collapse-output-transforms 1 --dimensionality 3 --float 0 --initial-moving-transform [ /imgshare/tES-FUS/VNS/analysis/work/mriqc/sub-VNS001/mriqc_wf/funcMRIQC/SpatialNormalization/b7f02ecd54ea5938fab02c1055658ec7e4c43b3f/EPI2MNI/transform.mat, 0 ] --initialize-transforms-per-stage 0 --interpolation LanczosWindowedSinc --output [ epi_to_mni, epi_to_mni_Warped.nii.gz ] --transform Rigid[ 0.05 ] --metric Mattes[ /templateflow/tpl-MNI152NLin2009cAsym/tpl-MNI152NLin2009cAsym_res-02_desc-fMRIPrep_boldref.nii.gz, /imgshare/tES-FUS/VNS/analysis/work/mriqc/sub-VNS001/mriqc_wf/funcMRIQC/SpatialNormalization/b7f02ecd54ea5938fab02c1055658ec7e4c43b3f/SharpenEPI/sub-VNS001_ses-02_task-am_dir-PA_bold_desc-realigned_valid_tstat_corrected.nii.gz, 1, 56, Regular, 0.25 ] --convergence [ 10000x1000x100, 1e-06, 20 ] --smoothing-sigmas 4.0x2.0x1.0vox --shrink-factors 4x2x1 --use-histogram-matching 1 --masks [ /templateflow/tpl-MNI152NLin2009cAsym/tpl-MNI152NLin2009cAsym_res-02_desc-brain_mask.nii.gz, /imgshare/tES-FUS/VNS/analysis/work/mriqc/sub-VNS001/mriqc_wf/funcMRIQC/synthstrip_wf/b7f02ecd54ea5938fab02c1055658ec7e4c43b3f/synthstrip/clipped_corrected_desc-brain_mask.nii.gz ] --transform Affine[ 0.08 ] --metric Mattes[ /templateflow/tpl-MNI152NLin2009cAsym/tpl-MNI152NLin2009cAsym_res-02_desc-fMRIPrep_boldref.nii.gz, /imgshare/tES-FUS/VNS/analysis/work/mriqc/sub-VNS001/mriqc_wf/funcMRIQC/SpatialNormalization/b7f02ecd54ea5938fab02c1055658ec7e4c43b3f/SharpenEPI/sub-VNS001_ses-02_task-am_dir-PA_bold_desc-realigned_valid_tstat_corrected.nii.gz, 1, 56, Regular, 0.25 ] --convergence [ 500x250x100, 1e-06, 20 ] --smoothing-sigmas 4.0x2.0x1.0vox --shrink-factors 8x4x2 --use-histogram-matching 1 --masks [ /templateflow/tpl-MNI152NLin2009cAsym/tpl-MNI152NLin2009cAsym_res-02_desc-brain_mask.nii.gz, /imgshare/tES-FUS/VNS/analysis/work/mriqc/sub-VNS001/mriqc_wf/funcMRIQC/synthstrip_wf/b7f02ecd54ea5938fab02c1055658ec7e4c43b3f/synthstrip/clipped_corrected_desc-brain_mask.nii.gz ] --transform SyN[ 0.1, 3.0, 0.0 ] --metric CC[ /templateflow/tpl-MNI152NLin2009cAsym/tpl-MNI152NLin2009cAsym_res-02_desc-fMRIPrep_boldref.nii.gz, /imgshare/tES-FUS/VNS/analysis/work/mriqc/sub-VNS001/mriqc_wf/funcMRIQC/SpatialNormalization/b7f02ecd54ea5938fab02c1055658ec7e4c43b3f/SharpenEPI/sub-VNS001_ses-02_task-am_dir-PA_bold_desc-realigned_valid_tstat_corrected.nii.gz, 1, 4, None, 1 ] --convergence [ 100x30x20, 1e-06, 10 ] --smoothing-sigmas 3.0x2.0x1.0vox --shrink-factors 8x4x2 --use-histogram-matching 1 --masks [ /templateflow/tpl-MNI152NLin2009cAsym/tpl-MNI152NLin2009cAsym_res-02_desc-brain_mask.nii.gz, /imgshare/tES-FUS/VNS/analysis/work/mriqc/sub-VNS001/mriqc_wf/funcMRIQC/synthstrip_wf/b7f02ecd54ea5938fab02c1055658ec7e4c43b3f/synthstrip/clipped_corrected_desc-brain_mask.nii.gz ] --winsorize-image-intensities [ 0.005, 0.995 ]  --write-composite-transform 1[0m
+2026-10-15 15:01:33 |[34;20m INFO     [0m|[34;20m niworkflows      [0m|[34;20m Successful spatial normalization (retry #1).[0m
+2026-10-15 15:01:33 |[34;20m INFO     [0m|[34;20m niworkflows      [0m|[34;20m Report - setting fixed (/templateflow/tpl-MNI152NLin2009cAsym/tpl-MNI152NLin2009cAsym_res-02_desc-fMRIPrep_boldref.nii.gz) and moving (/imgshare/tES-FUS/VNS/analysis/work/mriqc/sub-VNS001/mriqc_wf/funcMRIQC/SpatialNormalization/b7f02ecd54ea5938fab02c1055658ec7e4c43b3f/EPI2MNI/epi_to_mni_Warped.nii.gz) images[0m
+2026-10-15 15:01:33 |[34;20m INFO     [0m|[34;20m niworkflows      [0m|[34;20m Generating visual report[0m
+2026-10-15 15:10:22 |[93;20m WARNING  [0m|[93;20m nipype.interface [0m|[93;20m Estimated signal variation in the background was too small (MAD=0.0, sigma=160.2689)[0m
+2026-10-15 15:10:22 |[93;20m WARNING  [0m|[93;20m nipype.interface [0m|[93;20m Estimated signal variation in the background was too small (MAD=0.0, sigma=160.2689)[0m
+2026-10-15 15:10:22 |[93;20m WARNING  [0m|[93;20m nipype.interface [0m|[93;20m Estimated signal variation in the background was too small (MAD=0.0, sigma=160.2689)[0m
+2026-10-15 15:10:32 |[33;20m IMPORTANT [0m|[33;20m mriqc            [0m|[33;20m Participant level finished successfully averaging 00h 38min 35s per subject.[0m
+----------------------------------------------------------------
+  MRIQC completed (elapsed time 01h 17min 10s).
+----------------------------------------------------------------
+

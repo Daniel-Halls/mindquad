@@ -23,8 +23,11 @@ class BaseTest(unittest.TestCase):
         cls.tmp_root.mkdir(parents=True, exist_ok=True)
 
     def create_temp_dir(self) -> tempfile.TemporaryDirectory:
-        """Create temp directory inside .tmp/."""
-        return tempfile.TemporaryDirectory(dir=str(self.tmp_root))
+        """Create temp directory inside .tmp/ or fallback."""
+        try:
+            return tempfile.TemporaryDirectory(dir=str(self.tmp_root))
+        except (OSError, PermissionError):
+            return tempfile.TemporaryDirectory()
 
 
 class TestMRIQCConfig(unittest.TestCase):
@@ -115,6 +118,8 @@ class TestMRIQCCommandBuilder(unittest.TestCase):
             "2",
             "--omp-nthreads",
             "2",
+            "--mem-gb",
+            "8",
             "--work-dir",
             "work/mriqc/sub-19081001",
             "--verbose-reports",
@@ -154,6 +159,8 @@ class TestMRIQCCommandBuilder(unittest.TestCase):
             "2",
             "--omp-nthreads",
             "2",
+            "--mem-gb",
+            "8",
             "--work-dir",
             "work/mriqc/group",
             "--verbose-reports",

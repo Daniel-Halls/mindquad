@@ -9,6 +9,11 @@ rule qsiprep_participant:
     input:
         bids_dataset=get_bids_dir() + "/dataset_description.json",
         bids_marker=get_bids_dir() + "/sub-{subject}/.bids_organized",
+        mriqc_marker=lambda wildcards: (
+            get_mriqc_dir() + f"/sub-{wildcards.subject}/.mriqc_complete"
+            if is_pipeline_enabled("mriqc")
+            else []
+        ),
     output:
         marker=get_qsiprep_dir() + "/sub-{subject}/.qsiprep_complete",
         report=get_qsiprep_dir() + "/sub-{subject}.html",

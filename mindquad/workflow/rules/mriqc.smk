@@ -25,6 +25,7 @@ rule mriqc_participant:
             Path(get_work_dir()) / "mriqc" / f"sub-{wildcards.subject}"
         ),
         tmp_dir=get_tmp_dir(),
+        mem_gb=get_mriqc_mem_gb(),
         extra_args=get_mriqc_extra_args(),
     threads: get_mriqc_threads()
     shell:
@@ -37,6 +38,7 @@ rule mriqc_participant:
             --work-dir "{params.work_dir}" \
             --tmp-dir "{params.tmp_dir}" \
             --threads {threads} \
+            --mem-gb {params.mem_gb} \
             --modalities {params.modalities} \
             --marker "{output.marker}" \
             --report "{output.report}" \
@@ -64,6 +66,7 @@ rule mriqc_group:
         modalities=get_mriqc_modalities(),
         work_dir=str(Path(get_work_dir()) / "mriqc" / "group"),
         tmp_dir=get_tmp_dir(),
+        mem_gb=get_mriqc_mem_gb(),
         extra_args=get_mriqc_extra_args(),
     threads: get_mriqc_threads()
     shell:
@@ -75,6 +78,7 @@ rule mriqc_group:
             --work-dir "{params.work_dir}" \
             --tmp-dir "{params.tmp_dir}" \
             --threads {threads} \
+            --mem-gb {params.mem_gb} \
             --modalities {params.modalities} \
             --marker "{output.group_marker}" \
             --extra-args "{params.extra_args}" \

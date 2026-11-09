@@ -52,8 +52,8 @@ def parse_arguments() -> argparse.Namespace:
         "-n",
         "--cores",
         type=int,
-        default=1,
-        help="Number of cores to use.",
+        default=None,
+        help="Number of cores to use (defaults to 'all' for HPC submit, 1 locally).",
     )
     parser.add_argument(
         "-s",
@@ -341,6 +341,11 @@ def build_snakemake_command(
         List[str]: A list of strings representing the Snakemake command.
     """
     snakemake_bin = resolve_snakemake_executable()
+    resolved_cores = (
+        str(args.cores)
+        if getattr(args, "cores", None) is not None
+        else ("all" if getattr(args, "submit", None) else "1")
+    )
     command_components = [
         snakemake_bin,
         "--snakefile",
@@ -348,7 +353,7 @@ def build_snakemake_command(
         "--configfile",
         args.config,
         "--cores",
-        str(args.cores),
+        resolved_cores,
     ]
 
     if args.submit:

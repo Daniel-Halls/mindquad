@@ -103,8 +103,25 @@ def get_mriqc_modalities() -> str:
 
 
 def get_mriqc_threads() -> int:
-    """Return configured MRIQC thread count."""
+    """Return configured MRIQC thread count.
+
+    Returns
+    --------
+        int: integer object
+            Configured number of threads for MRIQC.
+    """
     return int((config.get("mriqc") or {}).get("threads", 2))
+
+
+def get_mriqc_mem_gb() -> int:
+    """Return configured MRIQC memory limit in GB.
+
+    Returns
+    --------
+        int: integer object
+            Configured memory limit in gigabytes for MRIQC.
+    """
+    return int((config.get("mriqc") or {}).get("mem_gb", 8))
 
 
 def get_bids_threads() -> int:
@@ -162,13 +179,19 @@ def get_raw_subject_dir(wildcards: Any) -> str:
     """
     cohort = StudyCohort(config)
     subject_wildcard = wildcards.subject
+    if cohort.is_bids and (cohort.raw_data_dir / f"sub-{subject_wildcard}").exists():
+        return str(cohort.raw_data_dir / f"sub-{subject_wildcard}")
+
     mapping: Dict[str, Any] = config.get("subject_mapping") or {}
-    reverse_mapping = {
-        cohort.get_bids_subject_label(sub_item): sub_item
-        for sub_item in cohort.subjects
-    }
-    for map_key, map_val in mapping.items():
-        reverse_mapping[cohort.get_bids_subject_label(map_key)] = map_key
+    reverse_mapping: Dict[str, str] = {}
+    for sub_item in cohort.subjects:
+        bids_label = cohort.get_bids_subject_label(sub_item)
+        if bids_label not in reverse_mapping:
+            reverse_mapping[bids_label] = sub_item
+    for map_key in mapping:
+        bids_label = cohort.get_bids_subject_label(str(map_key))
+        if bids_label not in reverse_mapping:
+            reverse_mapping[bids_label] = str(map_key)
 
     raw_name = reverse_mapping.get(subject_wildcard, subject_wildcard)
     candidate = cohort.raw_data_dir / raw_name
