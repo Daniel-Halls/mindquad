@@ -33,3 +33,4 @@ dev = [
 
 [project.scripts]
 mindquad = "mindquad.cli:main"
+reorient_fsl = "mindquad.workflow.scripts.reorient_fsl:main"

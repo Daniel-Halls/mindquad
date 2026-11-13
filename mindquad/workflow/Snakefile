@@ -91,6 +91,11 @@ def get_dynamic_targets(wildcards):
                 f"{get_qsiprep_dir()}/sub-{subject_label}/.qsiprep_complete"
             )
             targets.append(f"{get_qsiprep_dir()}/sub-{subject_label}.html")
+            if is_qsiprep_reorient_enabled():
+                targets.append(
+                    f"{get_qsiprep_dir()}/sub-{subject_label}/"
+                    ".reorient_fsl_complete"
+                )
 
         # If subject has T2w or FLAIR data, HCP PostFreeSurfer runs
         if (has_t2w or has_flair) and has_anat and is_pipeline_enabled("hcp"):

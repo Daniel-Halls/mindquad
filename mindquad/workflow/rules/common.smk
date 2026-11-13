@@ -463,6 +463,21 @@ def get_qsiprep_extra_args() -> str:
     default_args = "--skip-bids-validation --notrack"
     return str((config.get("qsiprep") or {}).get("args", default_args))
 
+
+def is_qsiprep_reorient_enabled() -> bool:
+    """Check if automatic FSL reorientation of QSIPrep outputs is enabled.
+
+    Returns
+    --------
+        bool: boolean object
+            True if QSIPrep reorientation is enabled, False otherwise.
+    """
+    if not is_pipeline_enabled("qsiprep"):
+        return False
+    qsiprep_cfg = config.get("qsiprep") or {}
+    return bool(qsiprep_cfg.get("reorient_fsl", True))
+
+
 def get_coregistration_dir() -> str:
     """Return the Coregistration derivatives output directory path."""
     return str(Path(get_derivatives_dir()) / "coregistration")

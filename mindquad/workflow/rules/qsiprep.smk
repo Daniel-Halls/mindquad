@@ -58,3 +58,24 @@ rule qsiprep_participant:
             --extra-args "{params.extra_args}" \
             --executable "{params.executable}"
         """
+
+
+rule qsiprep_reorient_fsl:
+    """Reorient QSIPrep DWI outputs to FSL radiological convention (LAS+)."""
+    input:
+        marker=get_qsiprep_dir() + "/sub-{subject}/.qsiprep_complete",
+    output:
+        marker=get_qsiprep_dir() + "/sub-{subject}/.reorient_fsl_complete",
+    params:
+        python_bin=sys.executable,
+        scripts_dir=get_scripts_dir(),
+        qsiprep_dir=get_qsiprep_dir(),
+        subject="{subject}",
+    threads: 1
+    shell:
+        """
+        {params.python_bin} "{params.scripts_dir}"/reorient_fsl.py \
+            --qsiprep-dir "{params.qsiprep_dir}" \
+            --subject "{params.subject}"
+        touch "{output.marker}"
+        """

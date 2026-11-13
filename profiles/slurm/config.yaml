@@ -59,6 +59,11 @@ set-resources:
     time: "12:00:00"
     gres: "--gres=gpu:1"
 
+  qsiprep_reorient_fsl:
+    partition: "imgcomputeq"
+    mem_mb: 8000
+    time: "00:30:00"
+
   mriqc_participant:
     partition: "imgcomputeq"
     mem_mb: 12000

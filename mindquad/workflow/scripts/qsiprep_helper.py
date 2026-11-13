@@ -138,21 +138,45 @@ class QSIPrepConfig:
     ) -> None:
         """Initialize QSIPrepConfig instance.
 
-        Args:
-            threads: Processing thread count (must be 1 or 2).
-            mem_mb: Memory limit in megabytes.
-            output_resolution: Isotropic voxel resolution in mm for output DWI.
-            denoise_method: DWI denoising method enum or string.
-            unringing_method: Gibbs unringing method enum or string.
-            separate_all_dwis: Whether to process DWI scans separately.
-            fs_license: Path to FreeSurfer license file.
-            do_reconall: Whether to run FreeSurfer surface reconstruction.
-            bids_filter_file: Path to custom BIDS filter JSON file.
-            extra_args: Extra CLI flags passed to QSIPrep.
-            bids_dir: Path to BIDS dataset root directory.
-            derivatives_dir: Path to derivatives directory.
-            work_dir: Path to intermediate working directory.
-            tmp_dir: Path to project-local temporary directory.
+        Parameters
+        ------------
+        threads: int
+            Processing thread count (must be 1 or 2). Defaults to 2.
+        mem_mb: int
+            Memory limit in megabytes. Defaults to 8000.
+        output_resolution: float
+            Isotropic voxel resolution in mm for output DWI. Defaults to 1.5.
+        denoise_method: Any
+            DWI denoising method enum or string. Defaults to DWIDENOISE.
+        unringing_method: Any
+            Gibbs unringing method enum or string. Defaults to MRDEGIBBS.
+        separate_all_dwis: bool
+            Whether to process DWI scans separately. Defaults to False.
+        fs_license: Optional[str]
+            Path to FreeSurfer license file. Defaults to None.
+        eddy_config: Optional[str]
+            Path to eddy_params.json file. Defaults to None.
+        do_reconall: bool
+            Whether to run FreeSurfer surface reconstruction.
+            Defaults to False.
+        bids_filter_file: Optional[str]
+            Path to custom BIDS filter JSON file. Defaults to None.
+        extra_args: str
+            Extra CLI flags passed to QSIPrep. Defaults to
+            "--skip-bids-validation --notrack".
+        bids_dir: str
+            Path to BIDS dataset root directory. Defaults to "bids".
+        derivatives_dir: str
+            Path to derivatives directory. Defaults to "derivatives".
+        work_dir: str
+            Path to intermediate working directory. Defaults to "work".
+        tmp_dir: str
+            Path to project-local temporary directory. Defaults to ".tmp".
+
+        Returns
+        --------
+            None: NoneType
+                None return value.
         """
         self._threads = threads
         self._mem_mb = mem_mb
@@ -493,6 +517,41 @@ class QSIPrepPathResolver:
         filename = f"sub-{clean_sub}_space-{space}_desc-brain_mask.nii.gz"
         return self.get_subject_dir(clean_sub) / "dwi" / filename
 
+    def get_dwi_fslstd(self, subject: str, space: str = "T1w") -> Path:
+        """Return reoriented FSL standard DWI NIfTI volume path.
+
+        Parameters
+        ------------
+        subject: str
+            Subject identifier string.
+        space: str
+            Reference space name. Defaults to "T1w".
+
+        Returns
+        --------
+            Path: Path object
+                Path to reoriented FSL standard DWI NIfTI file.
+        """
+        clean_sub = subject.replace("sub-", "").strip()
+        filename = f"sub-{clean_sub}_space-{space}_desc-fslstd_dwi.nii.gz"
+        return self.get_subject_dir(clean_sub) / "dwi" / filename
+
+    def get_dwi_fsl_dir(self, subject: str) -> Path:
+        """Return FSL directory path containing standard named files.
+
+        Parameters
+        ------------
+        subject: str
+            Subject identifier string.
+
+        Returns
+        --------
+            Path: Path object
+                Path to FSL convention output directory.
+        """
+        clean_sub = subject.replace("sub-", "").strip()
+        return self.get_subject_dir(clean_sub) / "dwi" / "fsl"
+
     def get_anatomical_preproc(self, subject: str) -> Path:
         """Return preprocessed anatomical T1w volume path.
 
@@ -684,27 +743,53 @@ class QSIPrepRunner:
     ) -> int:
         """Execute QSIPrep pipeline for a single participant.
 
-        Args:
-            bids_dir: Path to BIDS dataset root directory.
-            output_dir: Path to QSIPrep derivatives output directory.
-            subject: Subject label string.
-            work_dir: Path to intermediate working directory.
-            tmp_dir: Path to temporary directory.
-            threads: Number of processing threads (max 2).
-            mem_mb: Memory allocation in MB.
-            output_resolution: Isotropic voxel resolution in mm for output DWI.
-            denoise_method: Denoising method enum or string.
-            unringing_method: Gibbs unringing method.
-            separate_all_dwis: Process each DWI independently.
-            fs_license: FreeSurfer license file path.
-            do_reconall: Run FreeSurfer surface reconstruction flag.
-            bids_filter_file: BIDS query filter file path.
-            extra_args: Extra command line flags.
-            marker_path: Optional marker file path touched upon completion.
-            report_path: Optional destination path for HTML report.
+        Parameters
+        ------------
+        bids_dir: Path
+            Path to BIDS dataset root directory.
+        output_dir: Path
+            Path to QSIPrep derivatives output directory.
+        subject: str
+            Subject label string.
+        work_dir: Path
+            Path to intermediate working directory.
+        tmp_dir: Path
+            Path to temporary directory.
+        threads: int
+            Number of processing threads. Defaults to 2.
+        mem_mb: int
+            Memory allocation in MB. Defaults to 8000.
+        output_resolution: float
+            Isotropic voxel resolution in mm for output DWI. Defaults to 1.5.
+        denoise_method: Any
+            Denoising method enum or string. Defaults to DWIDENOISE.
+        unringing_method: Any
+            Gibbs unringing method. Defaults to MRDEGIBBS.
+        separate_all_dwis: bool
+            Process each DWI independently. Defaults to False.
+        fs_license: Optional[str]
+            FreeSurfer license file path. Defaults to None.
+        eddy_config: Optional[str]
+            Eddy parameters JSON file path. Defaults to None.
+        do_reconall: bool
+            Run FreeSurfer surface reconstruction flag. Defaults to False.
+        bids_filter_file: Optional[str]
+            BIDS query filter file path. Defaults to None.
+        extra_args: str
+            Extra command line flags. Defaults to
+            "--skip-bids-validation --notrack".
+        marker_path: Optional[Path]
+            Optional marker file path touched upon completion.
+            Defaults to None.
+        report_path: Optional[Path]
+            Optional destination path for HTML report. Defaults to None.
+        executable: str
+            QSIPrep executable string or path. Defaults to "qsiprep".
 
-        Returns:
-            Process exit status code integer.
+        Returns
+        --------
+            int: integer object
+                Process exit status code integer.
         """
         config = QSIPrepConfig(
             threads=threads,
@@ -774,6 +859,31 @@ class QSIPrepRunner:
                 result.returncode,
             )
             return result.returncode
+
+        try:
+            try:
+                from mindquad.workflow.scripts.reorient_fsl import (
+                    FSLReorienter,
+                )
+            except ImportError:
+                from reorient_fsl import FSLReorienter
+            reorienter = FSLReorienter()
+            reorienter.reorient_subject(output_dir, subject)
+            clean_sub = subject.replace("sub-", "").strip()
+            reorient_marker = (
+                output_dir / f"sub-{clean_sub}" / ".reorient_fsl_complete"
+            )
+            reorient_marker.parent.mkdir(parents=True, exist_ok=True)
+            reorient_marker.write_text(
+                "FSL reorientation complete\n", encoding="utf-8"
+            )
+            self._logger.info(
+                "Successfully generated FSL-convention outputs for %s", subject
+            )
+        except Exception as err:
+            self._logger.warning(
+                "FSL reorientation skipped or encountered error: %s", err
+            )
 
         if marker_path is not None:
             marker_path.parent.mkdir(parents=True, exist_ok=True)

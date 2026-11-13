@@ -110,6 +110,12 @@ set-resources:
     time: "12:00:00"
     gres: "--gres=gpu:1"
 
+  # QSIPrep FSL Reorientation: Convert QSIPrep outputs to FSL standard (LAS+)
+  qsiprep_reorient_fsl:
+    partition: "standard"
+    mem_mb: 8000
+    time: "00:30:00"
+
   # MRIQC: Automated Quality Control
   mriqc_participant:
     partition: "standard"
